@@ -1,0 +1,12 @@
+# 工作区数据（WorkBuddy 的记忆与配置，不参与项目）
+.workbuddy/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 依赖与日志（本项目当前零依赖，留作以后重构用）
+node_modules/
+npm-debug.log*
+yarn-error.log*
+*.log
