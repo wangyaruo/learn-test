@@ -104,6 +104,26 @@
   }
   .answer pre code{background:none;padding:0;color:var(--text);font-size:12.5px;line-height:1.7;display:block;white-space:pre}
 
+  /* ---------- 考点标签 ---------- */
+  .tag.clickable{cursor:pointer;transition:filter .15s}
+  .tag.clickable:hover{filter:brightness(1.3)}
+  .tag.clickable.on{outline:1px solid currentColor}
+
+  /* ---------- 面试官追问 ---------- */
+  .follow{background:var(--purple-soft);border-left:3px solid var(--purple)}
+  .follow .bt{color:var(--purple);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .fuAll{font-size:11.5px;color:var(--purple);cursor:pointer;opacity:.85;font-weight:500;letter-spacing:0;text-transform:none;white-space:nowrap}
+  .fuAll:hover{opacity:1;text-decoration:underline}
+  .fu{border-top:1px dashed var(--border);padding:10px 0}
+  .fu:first-child{border-top:0;padding-top:2px}
+  .fq{display:flex;gap:9px;cursor:pointer;align-items:flex-start;font-weight:600;font-size:13.5px;line-height:1.6}
+  .fq:hover{color:var(--purple)}
+  .fno{flex:none;font-family:var(--mono);font-size:11px;color:var(--purple);background:rgba(139,124,255,.18);border-radius:5px;padding:2px 6px;margin-top:1px}
+  .fa{display:none;margin:8px 0 2px 31px;color:var(--muted);font-size:13.5px;line-height:1.7}
+  .fu.open .fa{display:block;animation:fade .2s ease}
+  .fu.open .fq{color:var(--purple)}
+  .fa code{font-family:var(--mono);font-size:12.5px;background:var(--panel3);padding:1.5px 6px;border-radius:5px;color:var(--accent)}
+
   /* ---------- 按钮 ---------- */
   .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
   button{font-family:var(--sans);font-size:13.5px;border-radius:9px;cursor:pointer;transition:all .15s;border:1px solid var(--border);background:var(--panel2);color:var(--text);padding:9px 15px}
@@ -162,6 +182,7 @@
     <div class="frow"><span class="label">分类</span><div class="frow" id="catRow" style="gap:6px"></div></div>
     <div class="frow"><span class="label">难度</span><div class="frow" id="lvRow" style="gap:6px"></div></div>
     <div class="frow"><span class="label">范围</span><div class="frow" id="modeRow" style="gap:6px"></div></div>
+    <div class="frow" id="tagRow" style="display:none"><span class="label">标签</span><div class="frow" id="tagChips" style="gap:6px"></div></div>
   </section>
 
   <main class="card" id="card">
@@ -170,6 +191,7 @@
     <h2 class="q" id="qText">加载中…</h2>
     <div class="block hint" id="hintBox"><div class="bt">提示</div><div id="hintText"></div></div>
     <div class="block answer" id="ansBox"><div class="bt">参考答案</div><div id="ansText"></div></div>
+    <div class="block follow" id="fuBox"><div class="bt">面试官追问<span class="fuAll" id="fuAll">展开全部</span></div><div id="fuText"></div></div>
     <div class="actions">
       <button id="hintBtn">看提示<kbd>H</kbd></button>
       <button id="ansBtn" class="primary">看答案<kbd>A</kbd></button>
@@ -178,7 +200,8 @@
     </div>
   </main>
 
-  <footer>题库共 <b id="total">0</b> 题，全部离线内置 · 进度与收藏保存在本机浏览器</footer>
+  <footer>题库共 <b id="total">0</b> 题 · 含 <b id="fuTotal">0</b> 条面试官追问 · 全部离线内置 · 进度与收藏保存在本机浏览器<br>
+  快捷键：空格 换题 · H 提示 · A 答案 · S 收藏 · F 展开追问</footer>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -186,12 +209,15 @@
 /* ============================================================
    题库数据
    每条题目结构：
-     { c: 分类key, lv: 难度, q: 题干, h: 提示, a: 参考答案(HTML) }
+     { c: 分类key, lv: 难度, q: 题干, h: 提示, a: 参考答案(HTML),
+       tags: [考点标签...], fu: [{ q: 面试官追问, a: 要点(HTML) }, ...] }
    想加题就往数组里追加一个对象即可，参考最上面几条的写法。
+   不用自己反复核对字段 —— 直接跑 node scripts/check-bank.js，
+   哪一题漏了或写错了，它会逐条报出来。
 
    两条硬性约束（改完题库务必跑一次校验脚本）：
      1. 题干 q 必须全局唯一 —— 它是收藏与进度的稳定键（见下方 keyOf）
-     2. 答案 a 的反引号内不能出现裸反引号，行内代码一律用 <code> 标签
+     2. a 与 fu 的反引号内不能出现裸反引号，行内代码一律用 <code> 标签
 
    校验命令：node scripts/check-bank.js
    ============================================================ */
@@ -213,7 +239,12 @@ c(); // 2</code></pre>
 <li>函数柯里化、偏函数</li>
 <li>模块化早期方案（IIFE 模拟私有作用域）</li>
 <li>循环中保存每次迭代的值（let 或 IIFE）</li></ul>
-<p><b>内存问题：</b>闭包本身不是泄漏。被闭包引用的变量因为一直可达，无法被垃圾回收，所以会常驻内存。真正的问题是在闭包里长期持有 DOM 节点、大数组这类对象却不再释放。处理办法是把引用置为 null，或在组件卸载时移除事件监听。</p>`},
+<p><b>内存问题：</b>闭包本身不是泄漏。被闭包引用的变量因为一直可达，无法被垃圾回收，所以会常驻内存。真正的问题是在闭包里长期持有 DOM 节点、大数组这类对象却不再释放。处理办法是把引用置为 null，或在组件卸载时移除事件监听。</p>`,
+ tags:['闭包','作用域','内存'],
+ fu:[{q:`追问：循环里用 var 绑定事件，为什么最后输出的都是同一个值？怎么修？`, a:`因为 var 是函数作用域，三次迭代共用同一个变量，回调真正执行时读到的已是最终值。修法两种：把 var 换成 let（每次迭代生成新的词法绑定），或者用 IIFE 把当次的值当参数传进去锁住。`},
+   {q:`追问：闭包里的变量为什么不会被回收？这是内存泄漏吗？`, a:`要区分"常驻"和"泄漏"。被闭包引用的变量始终可达，GC 不会回收，这是设计意图，不是泄漏。真正的泄漏是任务已经结束却仍被意外持有——比如组件卸载了但事件监听没解绑、定时器没清、把 DOM 节点挂在了闭包变量上。答这类题先给定义，再说"是否泄漏取决于生命周期是否结束"。`},
+   {q:`追问：框架里的闭包陷阱，举个例子？`, a:`React 函数组件每次渲染都重新执行，渲染时捕获的 props/state 形成一层新的闭包。useCallback / useMemo 的依赖数组写漏了，就会把旧闭包缓存下来，导致回调里读到的还是上一次的值。这是闭包在框架里最常见的表现形式。`}]},
+
 
 {c:'js', lv:'基础', q:'var、let、const 三者有什么区别？',
  h:'从作用域、变量提升、重复声明、是否可修改这四个维度对比。',
@@ -227,7 +258,12 @@ c(); // 2</code></pre>
 <pre><code>const obj = { a: 1 };
 obj.a = 2;      // 可以
 obj = {};       // TypeError</code></pre>
-<p><b>实践建议：</b>默认用 const，需要重新赋值时用 let，var 基本不再使用。</p>`},
+<p><b>实践建议：</b>默认用 const，需要重新赋值时用 let，var 基本不再使用。</p>`,
+ tags:['作用域','TDZ','ES6'],
+ fu:[{q:`追问：什么叫暂时性死区（TDZ）？声明前访问会怎样？`, a:`let / const 的变量从进入块到声明语句之间处于 TDZ，访问会抛 ReferenceError，而不是得到 undefined。注意 typeof 同样会抛错，这是它和 var 最实际的差别。`},
+   {q:`追问：const 声明的对象属性能改吗？怎么做才真正不可变？`, a:`能改——const 约束的是绑定，不是值。要冻结用 Object.freeze（但这是浅冻结，嵌套对象仍可改）；深层次不可变要么递归冻结，要么从设计上就返回新对象。`},
+   {q:`追问：for 循环里的 let 是怎么做到每次迭代都是新变量的？`, a:`规范上，for 语句每次迭代会创建一个新的词法环境，并复制上一轮的值。所以闭包捕获的是各自那一份，不会互相干扰。这正是 let 相比 var 的关键差异，也是经典考题。`}]},
+
 
 {c:'js', lv:'基础', q:'什么是原型和原型链？instanceof 的判断依据是什么？',
  h:'函数有 prototype 属性，对象有 __proto__（或 [[Prototype]]）属性，两者指向同一个原型对象。',
@@ -242,7 +278,12 @@ Object.prototype.__proto__ === null;             // 原型链终点</code></pre>
 <p>当访问 p.say 时，引擎先在 p 自身找，找不到就沿着 __proto__ 逐级向上，直到 Object.prototype，最后是 null。这条查找路径就是<b>原型链</b>。</p>
 <p><b>instanceof 的判断依据：</b>沿左侧对象的原型链向上查找，看是否能找到右侧构造函数的 prototype。</p>
 <pre><code>p instanceof Person; // 等价于原型链上存在 Person.prototype</code></pre>
-<p><b>应用：</b>原型方法被所有实例共享，节省内存；这也是原型继承的基础。</p>`},
+<p><b>应用：</b>原型方法被所有实例共享，节省内存；这也是原型继承的基础。</p>`,
+ tags:['原型链','继承','instanceof'],
+ fu:[{q:`追问：instanceof 的判断过程是什么？手写要注意什么？`, a:`沿左侧对象的原型链逐层查找，看是否等于右侧的 prototype，命中返回 true，走到 null 返回 false。注意右侧必须是函数（否则抛 TypeError）；另外跨 iframe 的对象因为处于不同 Realm，instanceof 会失效，这时要用 Array.isArray 或 Object.prototype.toString.call。`},
+   {q:`追问：构造函数里 return 一个对象会怎样？`, a:`如果构造函数显式 return 一个对象，new 的结果就是那个对象，原本的 this 被丢弃；如果 return 的是原始值（或没写 return），则忽略它，仍返回新创建的实例。`},
+   {q:`追问：class 的继承和 ES5 手写继承，本质差别在哪？`, a:`class 的方法不可枚举、必须用 new 调用；更关键的是 extends 会把子类构造函数的原型指向父类构造函数，所以静态方法可以被继承——这是 ES5 手写继承最容易漏的一环。super 能工作也依赖这条原型关系。`}]},
+
 
 {c:'js', lv:'高频', q:'this 的指向规则是怎样的？箭头函数的 this 有什么不同？',
  h:'按调用方式分五类记忆：默认、隐式、显式、new、箭头函数。',
@@ -254,7 +295,12 @@ Object.prototype.__proto__ === null;             // 原型链终点</code></pre>
 <li><b>new 绑定：</b>new Fn() 时 this 指向新创建的对象。优先级：new &gt; 显式 &gt; 隐式 &gt; 默认。</li>
 <li><b>箭头函数：</b>没有自己的 this，继承定义时所在外层作用域的 this，且无法用 call / apply / bind 改变。同时它也没有 arguments、不能作为构造函数。</li>
 </ol>
-<p><b>易错点：</b>绑定丢失。setTimeout(obj.method, 100) 会丢失 this，因为传进去的是函数本身而不是调用表达式。解决办法是 bind(obj) 或改用箭头函数。</p>`},
+<p><b>易错点：</b>绑定丢失。setTimeout(obj.method, 100) 会丢失 this，因为传进去的是函数本身而不是调用表达式。解决办法是 bind(obj) 或改用箭头函数。</p>`,
+ tags:['this','绑定规则','箭头函数'],
+ fu:[{q:`追问：this 的绑定优先级从高到低是什么？`, a:`new 绑定 > 显式绑定（call/apply/bind）> 隐式绑定（obj.fn()）> 默认绑定（非严格模式指向全局对象，严格模式为 undefined）。箭头函数不参与这套规则，它取外层词法作用域的 this。`},
+   {q:`追问：为什么把对象方法赋值给变量再调用，this 就变了？`, a:`this 取决于调用时的形态，不是定义位置。obj.fn() 是隐式绑定，this 是 obj；const f = obj.fn; f() 变成默认绑定，this 丢失。常见解法是 bind 或改用箭头函数。`},
+   {q:`追问：React 类组件里事件处理函数为什么常要 bind(this)？`, a:`因为 onClick={this.handle} 相当于把函数摘下来再调用，隐式绑定丢失，类内部默认严格模式所以 this 是 undefined。现在的写法更推荐类字段箭头函数，或者直接用函数组件。`}]},
+
 
 {c:'js', lv:'高频', q:'什么是事件循环？宏任务和微任务的区别是什么？',
  h:'关键在于：每执行完一个宏任务，都要清空当前所有微任务，然后才可能渲染。',
@@ -269,7 +315,12 @@ Promise.resolve().then(() =&gt; console.log('3'));
 console.log('4');
 // 输出：1 4 3 2</code></pre>
 <p><b>为什么微任务优先级高：</b>微任务队列在每次宏任务结束后被完整清空，只有队列空了才会进入下一轮事件循环。所以微任务里再产生微任务，也会在本轮全部执行完。</p>
-<p><b>实践影响：</b>微任务中长时间循环会阻塞渲染（页面卡死）；setTimeout 嵌套超过 4 层时最小延迟被限制为 4ms。</p>`},
+<p><b>实践影响：</b>微任务中长时间循环会阻塞渲染（页面卡死）；setTimeout 嵌套超过 4 层时最小延迟被限制为 4ms。</p>`,
+ tags:['事件循环','微任务','宏任务'],
+ fu:[{q:`追问：哪些算宏任务，哪些算微任务？`, a:`宏任务：整段 script、setTimeout / setInterval、setImmediate（Node）、I/O、UI 渲染。微任务：Promise 的 then / catch / finally、queueMicrotask、MutationObserver、Node 的 process.nextTick（优先级更高）。`},
+   {q:`追问：微任务会不会饿死渲染？为什么？`, a:`会。每执行完一个宏任务，就会把微任务队列彻底清空（清空过程中新产生的微任务继续排队执行），全部清完才轮到渲染和下一个宏任务。所以不断排微任务会让页面直接卡死。`},
+   {q:`追问：await 后面的代码，相对同步代码是什么执行顺序？`, a:`await 之后的代码等价于放进 .then 里，属于微任务。它会先让出执行权，把当前同步代码跑完，再按微任务顺序恢复执行。`}]},
+
 
 {c:'js', lv:'高频', q:'深拷贝和浅拷贝的区别？如何实现一个深拷贝？',
  h:'区别在于"嵌套的引用类型"是否被复制。深拷贝要处理循环引用和特殊对象。',
@@ -287,7 +338,12 @@ console.log('4');
   }
   return target;
 }</code></pre>
-<p><b>现成方案与局限：</b>JSON.parse(JSON.stringify(obj)) 最省事，但会丢失 undefined、函数、Symbol，把 Date 变成字符串，无法处理循环引用和 Map / Set。structuredClone 是浏览器内置的深拷贝，支持循环引用和 Date，但不支持函数。</p>`},
+<p><b>现成方案与局限：</b>JSON.parse(JSON.stringify(obj)) 最省事，但会丢失 undefined、函数、Symbol，把 Date 变成字符串，无法处理循环引用和 Map / Set。structuredClone 是浏览器内置的深拷贝，支持循环引用和 Date，但不支持函数。</p>`,
+ tags:['深拷贝','引用类型','递归'],
+ fu:[{q:`追问：JSON.parse(JSON.stringify()) 有哪些坑？`, a:`会丢 undefined、函数、Symbol；Date 变成字符串；RegExp / Map / Set 变成空对象；NaN 和 Infinity 变成 null；遇到循环引用直接抛错。只适合纯 JSON 数据。`},
+   {q:`追问：循环引用怎么处理？`, a:`用一个 WeakMap 记录"原对象到副本"的映射，递归前先查表，命中就直接返回已有副本。这同时也解决了同一对象被多处引用时的引用一致性问题。`},
+   {q:`追问：structuredClone 出来了，还用手写吗？`, a:`structuredClone 是内置 API，支持 Date、Map、Set、ArrayBuffer、循环引用，但不支持函数、DOM 节点和自定义类的原型。日常数据直接用它；需要保留类实例或函数时才手写。`}]},
+
 
 {c:'js', lv:'高频', q:'防抖（debounce）和节流（throttle）的区别是什么？分别怎么实现？',
  h:'防抖是"等你停手再执行"，节流是"固定频率执行"。想一想搜索框输入和滚动监听分别该用哪个。',
@@ -311,7 +367,12 @@ function throttle(fn, wait = 200) {
     }
   };
 }</code></pre>
-<p><b>一句话区分：</b>防抖保证"最后一次"，节流保证"均匀分布"。搜索框需要等用户输完再发请求，用防抖；页面滚动时需要持续获取位置但不能太频繁，用节流。</p>`},
+<p><b>一句话区分：</b>防抖保证"最后一次"，节流保证"均匀分布"。搜索框需要等用户输完再发请求，用防抖；页面滚动时需要持续获取位置但不能太频繁，用节流。</p>`,
+ tags:['防抖','节流','闭包'],
+ fu:[{q:`追问：为什么实现里还要提供立即执行和取消能力？`, a:`搜索框希望在第一次输入时就响应，所以要 leading；组件卸载或切换数据源时要取消挂起的定时器，否则可能触发已失效的回调，所以要 cancel。面试实现题主动提这两点会明显加分。`},
+   {q:`追问：this 和参数怎么正确透传？`, a:`返回包装函数时用普通函数，内部通过 fn.apply(this, args) 转发，这样调用者绑定的 this 和实参都不会丢。如果用箭头函数包裹，this 会被固定在外层，参数仍要靠剩余参数转发。`},
+   {q:`追问：工作中你会自己写吗？`, a:`很少——lodash 的 debounce / throttle 已经处理了 leading、trailing、cancel、flush 这些边界。但面试考的是原理：闭包保存定时器 id、每次调用清掉旧的、转发 this 与参数。`}]},
+
 
 {c:'js', lv:'基础', q:'Promise 有哪几种状态？then 的返回值有什么规则？',
  h:'三个状态、两个终态不可逆；then 返回的一定是一个新 Promise。',
@@ -328,7 +389,12 @@ p.then(v =&gt; console.log(v))       // ok
 <li>返回 Promise → 等它 settle，新 Promise 跟随其状态</li>
 <li>抛出错误 → 新 Promise 变成 rejected</li>
 </ul>
-<p><b>常用静态方法：</b>Promise.all（全部成功才成功，一个失败就失败）、Promise.allSettled（等全部结束，返回每个结果）、Promise.race（第一个 settle 的决定结果）、Promise.any（第一个成功的决定结果）。</p>`},
+<p><b>常用静态方法：</b>Promise.all（全部成功才成功，一个失败就失败）、Promise.allSettled（等全部结束，返回每个结果）、Promise.race（第一个 settle 的决定结果）、Promise.any（第一个成功的决定结果）。</p>`,
+ tags:['Promise','链式调用','错误处理'],
+ fu:[{q:`追问：then 里返回一个 Promise 会怎样？`, a:`会被解包：下一个 then 要等这个 Promise settled 之后才执行，并且拿到它的值。链式调用能串起来就是靠这个机制。`},
+   {q:`追问：then 里 throw 或者返回 rejected 的 Promise 会怎样？`, a:`状态会沿链向下穿透，直到遇到写了第二个参数或 catch 的位置被处理。中间那些没写失败回调的 then 会被直接跳过。`},
+   {q:`追问：Promise 里的错误能用外层 try/catch 包住吗？`, a:`包不住异步 reject。同步抛出的错误会被 Promise 构造函数捕获并转成 rejected 状态；但异步阶段抛出的不会。要么链式 .catch，要么在 async 函数里 await 之后用 try/catch。`}]},
+
 
 {c:'js', lv:'进阶', q:'async / await 的本质是什么？它和 Promise 是什么关系？',
  h:'async 函数的返回值一定是 Promise；await 相当于 .then 的语法糖，但错误处理方式不同。',
@@ -346,7 +412,12 @@ p.then(v =&gt; console.log(v))       // ok
     console.error('统一捕获同步错误和 rejected', e);
   }
 }</code></pre>
-<p><b>与 then 的差异：</b>await 可以用 try / catch 捕获同步和异步错误，写法更接近同步；但要注意在循环中顺序 await 会串行执行，需要并发时应写成 <code>await Promise.all(list.map(...))</code>。</p>`},
+<p><b>与 then 的差异：</b>await 可以用 try / catch 捕获同步和异步错误，写法更接近同步；但要注意在循环中顺序 await 会串行执行，需要并发时应写成 <code>await Promise.all(list.map(...))</code>。</p>`,
+ tags:['async','await','并发控制'],
+ fu:[{q:`追问：await 后面跟一个普通值会怎样？`, a:`会被 Promise.resolve 包一层，但仍然会让出一次微任务。所以 await 1 之后的代码依然是异步执行的，顺序排在同步代码之后。`},
+   {q:`追问：async 函数里的错误不 catch 会去哪？`, a:`变成返回 Promise 的 rejected 状态，需要调用方处理，否则会触发 unhandledrejection。await 一个 rejected 的 Promise，等价于在那一行 throw。`},
+   {q:`追问：多个互不依赖的请求，串行 await 有什么问题？`, a:`总耗时等于所有请求之和，白白串行等待。应该先用 Promise.all 并发发起再统一 await，总耗时等于最慢的那个。这个追问在性能相关面试里出现频率很高。`}]},
+
 
 {c:'js', lv:'基础', q:'== 和 === 有什么区别？null 和 undefined 用哪个判断？',
  h:'=== 不做类型转换。== 有一条容易记错的类型转换规则表。',
@@ -364,7 +435,12 @@ null == undefined // true
 null == 0       // false
 [] == false     // true（[] 转成 ''，再转成 0）
 NaN == NaN      // false</code></pre>
-<p><b>实践建议：</b>一律用 ===。判断"值为空"时明确写 <code>v === null || v === undefined</code>，或用 <code>v == null</code> 这一个精确覆盖两者的写法。</p>`},
+<p><b>实践建议：</b>一律用 ===。判断"值为空"时明确写 <code>v === null || v === undefined</code>，或用 <code>v == null</code> 这一个精确覆盖两者的写法。</p>`,
+ tags:['隐式转换','相等判断','类型'],
+ fu:[{q:`追问：[] == false 为什么是 true？`, a:`两边都转成数字比较：[] 经 ToPrimitive 得到空字符串，再转数字是 0；false 转数字也是 0，所以相等。这类题要答"按规范先转成同一类型再比"，而不是"JS 乱来"。`},
+   {q:`追问：什么情况下用 == 反而是好实践？`, a:`基本只有一种：x == null 可以同时判掉 null 和 undefined，比写 x === null || x === undefined 简洁。其他场景统一用 ===。`},
+   {q:`追问：Object.is 和 === 有什么区别？`, a:`只有两处不同：Object.is(NaN, NaN) 为 true，而 NaN === NaN 为 false；Object.is(0, -0) 为 false，而 0 === -0 为 true。React 判断状态是否变化用的就是这套语义。`}]},
+
 
 {c:'js', lv:'基础', q:'JS 中判断数据类型有哪些方式？各自的局限是什么？',
  h:'typeof、instanceof、constructor、Object.prototype.toString，逐个说适用边界。',
@@ -377,7 +453,12 @@ NaN == NaN      // false</code></pre>
 </ul>
 <pre><code>Object.prototype.toString.call([])      // '[object Array]'
 Object.prototype.toString.call(null)    // '[object Null]'
-Number.isNaN(NaN);  Number.isFinite(1);  // 判断数字更严格，不做类型转换</code></pre>`},
+Number.isNaN(NaN);  Number.isFinite(1);  // 判断数字更严格，不做类型转换</code></pre>`,
+ tags:['typeof','instanceof','类型判断'],
+ fu:[{q:`追问：typeof null 为什么是 object？`, a:`早期 JS 用值的低位标记表示类型，null 的机器表示是全 0，被误判成了对象。这是历史遗留问题，为了兼容性一直保留至今。`},
+   {q:`追问：怎么准确判断数组和普通对象？`, a:`数组用 Array.isArray，它能识别跨 iframe 的数组；通用判断用 Object.prototype.toString.call(x)，会返回 [object Array] 这类标签。typeof 对数组和 null 都不可靠。`},
+   {q:`追问：typeof 一个没声明的变量会怎样？`, a:`返回 undefined 且不报错，这是 typeof 的安全特例。但如果变量处于 TDZ 中（let 已进入作用域但尚未初始化），typeof 会抛 ReferenceError。`}]},
+
 
 {c:'js', lv:'基础', q:'map、forEach、filter、reduce 有什么区别？',
  h:'是否返回新数组、能否中断、返回值是什么，这三点就能理清。',
@@ -393,7 +474,12 @@ arr.filter(n =&gt; n % 2 === 0);         // [2, 4]
 arr.reduce((sum, n) =&gt; sum + n, 0);   // 10
 // 用 reduce 统计词频
 ['a','b','a'].reduce((m, w) =&gt; (m[w] = (m[w] || 0) + 1, m), {}); // {a:2, b:1}</code></pre>
-<p><b>注意：</b>这些都是浅遍历，遇到嵌套数组需要自己递归或用 flatMap。另外它们都不会修改原数组，但回调里手动改动元素属性仍会影响原对象。</p>`},
+<p><b>注意：</b>这些都是浅遍历，遇到嵌套数组需要自己递归或用 flatMap。另外它们都不会修改原数组，但回调里手动改动元素属性仍会影响原对象。</p>`,
+ tags:['数组方法','reduce','遍历'],
+ fu:[{q:`追问：map 和 forEach 最大的差别是什么？`, a:`map 返回等长的新数组，语义是"转换"；forEach 返回 undefined，语义是"遍历并产生副作用"。想拿结果却用 forEach 里 push，是常见写法问题，代码评审时经常被指出。`},
+   {q:`追问：reduce 的初始值要不要给？`, a:`强烈建议给。不给时第一次回调的累加器是数组首元素，空数组会直接抛 TypeError；给了初始值语义更清晰，也统一了空数组的处理。`},
+   {q:`追问：这些方法能中途 break 吗？`, a:`不能。forEach / map 无法中断，只能靠抛异常或改用 for...of、some、find 这类能提前返回的方法。比如"找到第一个满足条件的就停"应该用 some 或 find。`}]},
+
 
 {c:'js', lv:'进阶', q:'JS 的垃圾回收机制是怎样的？什么是内存泄漏？',
  h:'核心是"可达性"：从根对象出发能否被引用到。',
@@ -407,7 +493,12 @@ arr.reduce((sum, n) =&gt; sum + n, 0);   // 10
 <li>脱离 DOM 树但被 JS 变量引用的节点（detached DOM）</li>
 <li>缓存无限增长且没有淘汰策略</li>
 </ul>
-<p><b>排查手段：</b>Chrome DevTools 的 Memory 面板，用 Heap Snapshot 做前后对比，或 Performance 面板观察内存曲线是否持续上升。</p>`},
+<p><b>排查手段：</b>Chrome DevTools 的 Memory 面板，用 Heap Snapshot 做前后对比，或 Performance 面板观察内存曲线是否持续上升。</p>`,
+ tags:['垃圾回收','内存泄漏','可达性'],
+ fu:[{q:`追问：什么叫可达性？`, a:`从根（全局对象、当前执行栈中的变量、闭包环境等）出发，沿引用链能访问到的对象就是可达的，可达即不回收。V8 用的是标记清除一类的算法，判断依据是可达性而不是引用计数。`},
+   {q:`追问：平时最容易写出哪几种内存泄漏？`, a:`未解绑的事件监听（尤其是挂在 window / document 上的）、忘记清理的定时器与订阅、被全局缓存或闭包长期持有的大对象、以及 detached DOM——节点已从文档移除但 JS 仍持有引用。`},
+   {q:`追问：怎么排查线上内存泄漏？`, a:`Chrome DevTools 的 Memory 面板：用 Heap snapshot 前后各采一次做对比，看哪些对象数量持续增长且不被释放；或看 Performance 面板的内存曲线，正常应呈锯齿状回落，若持续抬升就有泄漏。`}]},
+
 
 {c:'js', lv:'进阶', q:'为什么 0.1 + 0.2 !== 0.3？实际开发中怎么处理小数运算？',
  h:'和 IEEE 754 双精度浮点数的二进制表示有关。',
@@ -421,7 +512,12 @@ Math.abs(0.1 + 0.2 - 0.3) &lt; Number.EPSILON  // true，用误差容忍比较</
 <li>用 toFixed 或 toPrecision 四舍五入，注意 toFixed 自身也有舍入误差（1.005.toFixed(2) 得到 '1.00'）</li>
 <li>引入 decimal.js、big.js 这类高精度库</li>
 </ul>
-<p><b>顺带：</b>安全整数范围是 Number.MAX_SAFE_INTEGER（2^53 - 1）。超出场景用 BigInt。</p>`},
+<p><b>顺带：</b>安全整数范围是 Number.MAX_SAFE_INTEGER（2^53 - 1）。超出场景用 BigInt。</p>`,
+ tags:['浮点数','精度'],
+ fu:[{q:`追问：为什么 0.1 存不下来？`, a:`IEEE 754 双精度用二进制分数表示小数，0.1 是无限循环二进制小数，只能截断存储，于是产生舍入误差。整数在安全范围（正负 2 的 53 次方以内）是精确的。`},
+   {q:`追问：金额计算应该怎么做？`, a:`统一转成整数（以分为单位）参与运算，最后再转回；或引入 decimal.js / big.js 这类库。不要拿 toFixed 的结果当计算值用，它只是四舍五入后的展示形式。`},
+   {q:`追问：Number.EPSILON 怎么用？`, a:`用于浮点数的近似相等判断：Math.abs(a - b) < Number.EPSILON。注意它只适合量级接近 1 的数，大数之间的比较要按相对误差处理。`}]},
+
 
 {c:'js', lv:'基础', q:'什么是变量提升？作用域链是怎么查找变量的？',
  h:'分清楚"声明提升"和"初始化"两件事，函数声明和函数表达式的差别也要说。',
@@ -435,7 +531,12 @@ function foo(){}
 bar();            // TypeError: bar is not a function
 var bar = function(){};</code></pre>
 <p><b>let / const：</b>声明也会提升，但进入"暂时性死区"，在声明语句执行前访问会抛 ReferenceError。</p>
-<p><b>作用域链：</b>函数在定义时就确定了外层作用域，形成一条链。查找变量时从当前作用域开始逐级向外，直到全局作用域，都找不到则报 ReferenceError。注意是<b>词法作用域</b>——由定义位置决定，而不是调用位置。</p>`},
+<p><b>作用域链：</b>函数在定义时就确定了外层作用域，形成一条链。查找变量时从当前作用域开始逐级向外，直到全局作用域，都找不到则报 ReferenceError。注意是<b>词法作用域</b>——由定义位置决定，而不是调用位置。</p>`,
+ tags:['变量提升','作用域','TDZ'],
+ fu:[{q:`追问：函数声明和函数表达式在提升上有什么不同？`, a:`函数声明整体提升，声明前就能调用；函数表达式只提升变量名，声明前调用会因为值是 undefined 而报 not a function。同名冲突时，函数声明优先于 var 声明。`},
+   {q:`追问：作用域链是怎么查找变量的？`, a:`从当前词法环境开始，沿外层环境逐级向上查找，命中第一个就停止，一直到全局仍未找到则抛 ReferenceError。关键点是这条路径由代码的定义位置决定，与调用位置无关，所以叫词法作用域。`},
+   {q:`追问：为什么说 let 也提升，但表现像没提升？`, a:`let / const 确实被提升并创建了绑定，只是绑定在初始化前处于 TDZ，访问就报错，所以表现上"像没提升"。理解这点才能解释为什么 typeof 也会抛错。`}]},
+
 
 {c:'js', lv:'进阶', q:'call、apply、bind 有什么区别？手写一个 bind。',
  h:'前两个立即执行，bind 返回新函数；参数传递方式一个展开一个数组。',
@@ -452,7 +553,12 @@ var bar = function(){};</code></pre>
     return fn.apply(ctx, [...args, ...inner]);
   };
 };</code></pre>
-<p><b>注意点：</b>bind 的 this 一旦绑定不可再被 call / apply 覆盖；箭头函数无法被 bind 改变 this。</p>`},
+<p><b>注意点：</b>bind 的 this 一旦绑定不可再被 call / apply 覆盖；箭头函数无法被 bind 改变 this。</p>`,
+ tags:['call','apply','bind','this'],
+ fu:[{q:`追问：手写 bind 要考虑哪几件事？`, a:`① 返回新函数且 this 指向目标对象；② 支持参数预置（柯里化）；③ 用 new 调用新函数时，this 应指向新实例而不是被绑定的对象；④ 保留原函数的 prototype，保证 instanceof 还能用。`},
+   {q:`追问：bind 产生的函数，还能被 call 改 this 吗？`, a:`不能。绑定函数的 [[BoundThis]] 不可被覆盖，再 call / apply 也改不了。但用 new 调用时优先级更高，this 会指向新创建的对象。`},
+   {q:`追问：apply 的第二个参数除了数组还能传什么？`, a:`类数组对象也可以，只要带 length 属性，比如 arguments、DOM 的 NodeList。这也是 apply 与扩展运算符分工的一个常见场景。`}]},
+
 
 {c:'js', lv:'基础', q:'ES6 带来了哪些常用新特性？',
  h:'按语言、数据结构、异步、模块四类归纳，别零散罗列。',
@@ -467,7 +573,12 @@ var bar = function(){};</code></pre>
 <li><b>模块：</b>import / export</li>
 <li><b>其他：</b>Proxy / Reflect、可选链 ?.、空值合并 ??、Array.flat</li>
 </ul>
-<p><b>记忆抓手：</b>面试被问到这类开放题，按上面四组结构回答，每组举一个你真实用过的例子，比堆砌名词有效得多。</p>`},
+<p><b>记忆抓手：</b>面试被问到这类开放题，按上面四组结构回答，每组举一个你真实用过的例子，比堆砌名词有效得多。</p>`,
+ tags:['ES6','解构','新特性'],
+ fu:[{q:`追问：解构有哪些容易踩的坑？`, a:`对象解构按属性名匹配、与顺序无关，数组解构按位置；解构 null / undefined 会抛错，应给默认值兜底；对已声明的变量再解构，整个表达式要用括号包起来，否则会被解析成块语句。`},
+   {q:`追问：可选链和空值合并有什么区别？`, a:`可选链 ?. 用于安全访问，只对 null / undefined 短路；空值合并 ?? 只在左侧是 null / undefined 时取右侧，能保留 0 和空字符串，比 || 更精确。`},
+   {q:`追问：ES6 之后还有哪些值得关注的更新？`, a:`ES2020 的可选链、空值合并、BigInt；ES2021 的逻辑赋值运算符；ES2022 的顶层 await、类字段、数组 at；ES2023 的 findLast、toSorted（不改原数组）。了解语言在持续演进，比背版本号更重要。`}]},
+
 
 {c:'js', lv:'高频', q:'箭头函数和普通函数有哪些区别？',
  h:'this、arguments、能否 new、能否作为 Generator，四条。',
@@ -482,7 +593,12 @@ var bar = function(){};</code></pre>
   fn1: function () { return this.name; },   // 'A'（隐式绑定）
   fn2: () =&gt; this.name                      // undefined（继承外层，通常是 window）
 };</code></pre>
-<p><b>适用判断：</b>需要动态 this 时（对象方法、构造函数）用普通函数；需要固定外层 this 时（回调、setTimeout、数组方法内的回调）用箭头函数。</p>`},
+<p><b>适用判断：</b>需要动态 this 时（对象方法、构造函数）用普通函数；需要固定外层 this 时（回调、setTimeout、数组方法内的回调）用箭头函数。</p>`,
+ tags:['箭头函数','this','构造函数'],
+ fu:[{q:`追问：箭头函数为什么不能当构造函数？`, a:`它没有自己的 this，也没有 prototype 属性和 [[Construct]] 内部方法，用 new 调用会直接抛 TypeError。`},
+   {q:`追问：箭头函数有 arguments 吗？`, a:`没有自己的 arguments，用的是外层函数的。替代方案是剩余参数 ...args，它是真正的数组，还能直接用数组方法。`},
+   {q:`追问：什么场合反而不该用箭头函数？`, a:`对象的方法（this 会指向外层而不是对象）、需要动态 this 的回调、需要 arguments 的场景、需要被 new 的场合。事件处理里若依赖 this 指向当前元素，也要用普通函数。`}]},
+
 
 {c:'js', lv:'高频', q:'说说 DOM 事件流：捕获、目标、冒泡，以及事件委托的原理。',
  h:'事件流的三个阶段，以及为什么把监听挂在父元素上能处理子元素的事件。',
@@ -496,7 +612,12 @@ e.preventDefault();                           // 阻止默认行为（如链接�
   const li = e.target.closest('li');
   if (li) console.log(li.dataset.id);
 });</code></pre>
-<p><b>优点：</b>只需一个监听器，减少内存占用；动态新增的子元素自动生效，无需重新绑定。注意 click、mousedown 等冒泡，而 focus、blur、mouseenter 不冒泡（focus 需用 focusin 替代）。</p>`},
+<p><b>优点：</b>只需一个监听器，减少内存占用；动态新增的子元素自动生效，无需重新绑定。注意 click、mousedown 等冒泡，而 focus、blur、mouseenter 不冒泡（focus 需用 focusin 替代）。</p>`,
+ tags:['事件流','冒泡','事件委托'],
+ fu:[{q:`追问：既然事件会冒泡，为什么还要用事件委托？`, a:`三个收益：监听器数量从 N 降到 1（长列表尤其明显）、动态新增的元素自动生效、解绑时只需处理一处。代价是要判断 e.target，且依赖冒泡——像 focus、blur 这类不冒泡的事件不能直接委托。`},
+   {q:`追问：阻止传播的两种方式有什么区别？`, a:`stopPropagation 阻止事件继续向上冒泡或向下捕获；stopImmediatePropagation 还会阻止同一元素上其他监听器执行。注意 preventDefault 是取消默认行为，跟传播无关，两者常被混淆。`},
+   {q:`追问：React 的事件机制和原生有什么不同？`, a:`React 自己做了一套合成事件与统一委托：17 之前委托在 document 上，17 起改为挂到根容器。这意味着在 React 里混用原生监听时要留意触发顺序与冒泡边界。`}]},
+
 
 {c:'js', lv:'进阶', q:'Map 和普通对象的区别？什么场景应该用 Map？',
  h:'键的类型、顺序、性能、原型干扰，四个维度对比。',
@@ -513,7 +634,12 @@ m.set(key, 'value');   // 对象作键
 m.get(key);            // 'value'
 m.has(key); m.delete(key); m.clear();
 for (const [k, v] of m) {}</code></pre>
-<p><b>WeakMap：</b>键必须是对象，且是弱引用——键对象被回收后条目自动消失，因此不可遍历、没有 size。适合给 DOM 节点挂私有数据、做缓存避免泄漏。</p>`},
+<p><b>WeakMap：</b>键必须是对象，且是弱引用——键对象被回收后条目自动消失，因此不可遍历、没有 size。适合给 DOM 节点挂私有数据、做缓存避免泄漏。</p>`,
+ tags:['Map','WeakMap'],
+ fu:[{q:`追问：什么场景必须用 Map？`, a:`键不是字符串或 Symbol 时（对象、函数做键）；键需要按插入顺序稳定遍历；键的数量大且频繁增删（对象在频繁增删下性能更差）；需要直接拿到数量（Map 有 size，对象要 Object.keys 再取长度）。`},
+   {q:`追问：WeakMap 的键有什么限制？`, a:`键必须是对象，且是弱引用——键被回收后对应条目自动消失，因此它不可遍历、没有 size。适合给对象挂私有数据、做缓存或关联元信息，天然避免内存泄漏。`},
+   {q:`追问：Map 能直接 JSON.stringify 吗？`, a:`不能，会被序列化成空对象。要转就手动转成数组，比如 Object.fromEntries(map)，或者先把键统一成字符串。这是两者互换时最常见的坑。`}]},
+
 
 {c:'js', lv:'基础', q:'什么是柯里化（currying）？手写一个通用的 curry 函数。',
  h:'把多参数函数拆成一系列单参数函数，核心是"参数够了才执行"。',
@@ -529,7 +655,12 @@ add(1)(2)(3);   // 6
 add(1, 2)(3);   // 6
 add(1)(2, 3);   // 6</code></pre>
 <p>注意这里用 <code>fn.length</code> 来判断参数是否收集完毕，它表示形参个数，不包括剩余参数和默认值参数。</p>
-<p><b>用途：</b>参数复用与预设（如把通用的请求函数柯里化成 get / post）、延迟执行、配合函数组合 compose。</p>`},
+<p><b>用途：</b>参数复用与预设（如把通用的请求函数柯里化成 get / post）、延迟执行、配合函数组合 compose。</p>`,
+ tags:['柯里化','闭包','函数式'],
+ fu:[{q:`追问：柯里化有什么实际价值？`, a:`参数复用（固定部分参数生成专用函数）、延迟执行、以及让函数更容易组合——函数式里的 pipe / compose 依赖单参函数。前端常见于工具函数定制和中间件风格的调用。`},
+   {q:`追问：怎么判断参数够了可以执行？`, a:`靠原函数的 length（形参个数）与已收集的参数个数比较。注意 length 不包含剩余参数和有默认值的参数，这是手写时最容易出错的边界。`},
+   {q:`追问：它和部分应用（partial application）是一回事吗？`, a:`不是。柯里化强调的是"每次只收一个参数"的调用形式，部分应用是预先固定任意几个参数。实践中常被混着叫，但概念要分清。`}]},
+
 
 /* ---------- CSS ---------- */
 {c:'css', lv:'基础', q:'标准盒模型和 IE 盒模型有什么区别？box-sizing 怎么用？',
@@ -540,7 +671,12 @@ add(1)(2, 3);   // 6</code></pre>
 </ul>
 <pre><code>*, *::before, *::after { box-sizing: border-box; }</code></pre>
 <p><b>实践建议：</b>全站统一设成 border-box，这样给元素设 padding 时不会撑破布局，写响应式宽度时更好预估。列表页、卡片、栅格布局都受益。</p>
-<p><b>顺带：</b>margin 不计入盒模型尺寸；行内元素（非替换元素）设置 width / height 无效。</p>`},
+<p><b>顺带：</b>margin 不计入盒模型尺寸；行内元素（非替换元素）设置 width / height 无效。</p>`,
+ tags:['盒模型','box-sizing','布局'],
+ fu:[{q:`追问：实际项目里为什么通常统一设成 border-box？`, a:`因为设定的 width 就等于元素实际占位宽度，padding 和 border 不会把它撑大，百分比宽度和多列布局的计算不容易出错。可以补一句：为了性能一般不会无脑写全局通配符，更常见的做法是只对表单和布局元素设置，或接受这点开销换取一致性。`},
+   {q:`追问：元素宽 100%，加了 padding 为什么就溢出了？`, a:`默认 content-box 下 width 只算内容盒，实际占位还要加上左右 padding 和 border，总宽超过父容器。把该元素设为 border-box，或者用 calc 从 100% 里减掉 padding。`},
+   {q:`追问：margin 折叠和盒模型有关系吗？`, a:`没有直接关系，但常被一起问。垂直相邻的块级元素上下 margin 会合并取较大值；父子之间如果没有 BFC、padding 或 border 分隔，子元素的 margin-top 也会"溢出"到父元素外侧。`}]},
+
 
 {c:'css', lv:'高频', q:'实现水平垂直居中，你能说出几种方案？',
  h:'按"是否需要知道宽高""是否适合现代布局"来组织答案。',
@@ -559,7 +695,12 @@ add(1)(2, 3);   // 6</code></pre>
   width: 200px; height: 100px;
 }</code></pre>
 <p><b>方案五：行内元素</b>——给父元素设 text-align: center 和 line-height 等于高度。</p>
-<p><b>选择建议：</b>常规布局用 Flex / Grid；需要脱离文档流的浮层用绝对定位 + transform；不要用 line-height 这种依赖固定高度的老方案做弹性布局。</p>`},
+<p><b>选择建议：</b>常规布局用 Flex / Grid；需要脱离文档流的浮层用绝对定位 + transform；不要用 line-height 这种依赖固定高度的老方案做弹性布局。</p>`,
+ tags:['居中','flex','定位'],
+ fu:[{q:`追问：绝对定位加 transform 的方案，原理是什么？`, a:`top / left 50% 先把元素左上角挪到容器中心，再用 transform: translate(-50%, -50%) 按自身尺寸回退一半。相比负 margin 方案，它不需要事先知道元素的宽高，所以更通用。`},
+   {q:`追问：父元素高度不确定时，哪些方案仍然有效？`, a:`flex 和 grid 方案有效，因为它们按实际内容高度对齐；绝对定位加 transform 也有效，百分比是相对容器的实际高度算的。用 line-height 等于高度的方案要求高度已知，这种情况下会失效。`},
+   {q:`追问：多行文本怎么垂直居中？`, a:`flex 容器配合 align-items 与 text-align，或 grid 的 place-items: center，也可以用 table-cell 加 vertical-align: middle。line-height 那套只适合单行文本。`}]},
+
 
 {c:'css', lv:'进阶', q:'什么是 BFC？如何触发？能解决哪些问题？',
  h:'BFC 是块级格式化上下文，可以理解为一个独立的渲染区域，内外互不影响。',
@@ -575,7 +716,12 @@ add(1)(2, 3);   // 6</code></pre>
 <li><b>高度塌陷：</b>父元素内部全是浮动元素导致父元素高度为 0，触发父元素 BFC 即可撑开。最干净的写法是 <code>display: flow-root</code>。</li>
 <li><b>margin 塌陷/重叠：</b>相邻兄弟元素垂直 margin 会合并取较大值。给其中一层包一个 BFC 容器可以阻止。</li>
 <li><b>浮动元素覆盖：</b>左侧浮动、右侧正常文字会环绕，给右侧内容加 overflow: hidden 形成 BFC 即可隔离。</li>
-</ol>`},
+</ol>`,
+ tags:['BFC','浮动','外边距折叠'],
+ fu:[{q:`追问：触发 BFC 的常见方式有哪些？`, a:`overflow 不为 visible、display 为 inline-block / flex / grid / flow-root、position 为 absolute 或 fixed、float 不为 none。现代写法推荐 display: flow-root，它不像 overflow: hidden 那样会裁剪内容，语义也更明确。`},
+   {q:`追问：BFC 能解决哪几类问题？`, a:`① 父元素高度塌陷（子元素浮动）——BFC 会把浮动子元素纳入高度计算；② 外边距折叠；③ 浮动元素覆盖——BFC 区域不与浮动重叠，可用来做两栏自适应布局。`},
+   {q:`追问：用 overflow: hidden 触发 BFC 有什么副作用？`, a:`会裁剪溢出内容，比如下拉菜单、tooltip、阴影被切掉；还可能引发可访问性问题（内容被隐藏但仍在文档流里被读屏读到）。所以更推荐 flow-root 或伪元素 clearfix。`}]},
+
 
 {c:'css', lv:'基础', q:'CSS 选择器的权重如何计算？!important 的优先级怎么理解？',
  h:'用四位数 (a, b, c, d) 表示，逐位比较，不进位。',
@@ -591,7 +737,12 @@ add(1)(2, 3);   // 6</code></pre>
 div.box p            →  1 + 10 + 1 = 12</code></pre>
 <p><b>比较方式：</b>按位比较，不进位。例如 1 个 ID 的选择器 (0,1,0,0) 永远大于任意数量的类选择器。</p>
 <p><b>!important：</b>直接覆盖所有常规声明的权重比较，只被更靠后的 !important 覆盖。它是最后手段，用多了会导致样式难以维护。正常情况应通过调整选择器层级或组件作用域解决。</p>
-<p><b>补充：</b>同权重时后出现的生效；CSS 变量、继承来的样式权重最低。</p>`},
+<p><b>补充：</b>同权重时后出现的生效；CSS 变量、继承来的样式权重最低。</p>`,
+ tags:['选择器','优先级','层叠'],
+ fu:[{q:`追问：权重相同时谁生效？`, a:`后出现的覆盖先出现的。如果来自不同来源，顺序是内联样式 > 作者样式 > 用户样式 > 浏览器默认。!important 会反转作者与用户样式之间的顺序关系。`},
+   {q:`追问：!important 什么时候用是可以接受的？`, a:`覆盖第三方库或内联样式、且确实无法改源码时；原子化的工具类也可以用。原则是能改结构就别用，滥用会让层叠关系彻底失控，后面只能加更多 !important。`},
+   {q:`追问：:is() 和 :where() 对权重有什么影响？`, a:`:is() 取参数中权重最高的那个参与计算；:where() 的权重恒为 0，适合写默认样式，方便被业务样式覆盖。这是现代 CSS 里控制权重的推荐手段。`}]},
+
 
 {c:'css', lv:'高频', q:'flex: 1 代表什么？flex 的三个属性分别是什么含义？',
  h:'flex 是 flex-grow / flex-shrink / flex-basis 的简写。',
@@ -608,7 +759,12 @@ div.box p            →  1 + 10 + 1 = 12</code></pre>
 flex: 1     → 1 1 0%
 flex: auto  → 1 1 auto
 flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
-<p><b>易错点：</b>flex-basis: 0% 与 auto 的差异在于布局计算顺序。用 flex: 1 时两个等长元素严格平分；用 flex: auto 时先按内容宽度占位，剩余空间再平分，所以内容长的会更宽。</p>`},
+<p><b>易错点：</b>flex-basis: 0% 与 auto 的差异在于布局计算顺序。用 flex: 1 时两个等长元素严格平分；用 flex: auto 时先按内容宽度占位，剩余空间再平分，所以内容长的会更宽。</p>`,
+ tags:['flex','弹性布局'],
+ fu:[{q:`追问：flex: 1 展开是哪三个值？`, a:`flex-grow: 1、flex-shrink: 1、flex-basis: 0%。注意 basis 是 0% 而不是 auto，这决定了它从零开始分摊剩余空间，而不是按内容宽度分配。`},
+   {q:`追问：flex: 1 和 flex: auto 有什么区别？`, a:`flex: auto 等于 1 1 auto，基准是内容宽度，所以内容多的项最终会更宽；flex: 1 的基准是 0，各项趋向等宽。想实现"等宽列"必须用 flex: 1。`},
+   {q:`追问：flex-shrink 的收缩量是怎么算的？`, a:`不是简单按 shrink 值的比例，而是按 shrink 乘以 basis 加权分摊溢出量。所以两项 shrink 相同但 basis 不同时，实际收缩量并不相同，这点经常被误解。`}]},
+
 
 {c:'css', lv:'进阶', q:'重排（回流）和重绘有什么区别？如何减少它们？',
  h:'重排一定会引起重绘，重绘不一定引起重排。',
@@ -623,7 +779,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li>动画用 transform 和 opacity，它们能走合成层，避免重排重绘</li>
 <li>用 will-change 或 translateZ(0) 提升为独立图层（谨慎使用，图层过多反而增加内存）</li>
 <li>频繁动画元素设 position: absolute 或 fixed，减少影响范围</li>
-</ul>`},
+</ul>`,
+ tags:['重排与重绘','渲染性能'],
+ fu:[{q:`追问：哪些属性只触发重绘，不触发重排？`, a:`只影响绘制不影响几何的：color、background-color、visibility、box-shadow、outline。而 width、height、margin、padding、font-size、display、position 会改变布局，触发重排。`},
+   {q:`追问：为什么循环里读 offsetTop 会拖慢性能？`, a:`读布局属性会强制浏览器立即计算样式和布局（强制同步布局），打断了浏览器攒着批量处理的优化。所以要避免"读—写—读"交替，正确做法是先把要读的值一次性读完，再统一写。`},
+   {q:`追问：transform 和 opacity 的动画为什么更流畅？`, a:`它们可以只走合成阶段，既不重排也不重绘，直接交给 GPU 处理。配合 will-change 或 translateZ(0) 可以提升为独立图层，但图层过多会吃内存，需要权衡。`}]},
+
 
 {c:'css', lv:'进阶', q:'移动端 1 像素边框问题是什么？怎么解决？',
  h:'和设备像素比（DPR）有关，CSS 的 1px 在视网膜屏上会被渲染成多个物理像素。',
@@ -643,7 +804,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <p><b>方案二：box-shadow 模拟</b>——<code>box-shadow: inset 0 -1px 0 #ddd;</code>，无圆角需求时可用。</p>
 <p><b>方案三：viewport 缩放</b>——通过 JS 动态设置 initial-scale = 1 / devicePixelRatio。改动大，容易影响其他样式，慎用。</p>
 <p><b>方案四：0.5px</b>——部分安卓机型不支持，兼容性差。</p>
-<p><b>选择建议：</b>优先用 transform + 伪元素，兼容性最好，不影响布局方向。</p>`},
+<p><b>选择建议：</b>优先用 transform + 伪元素，兼容性最好，不影响布局方向。</p>`,
+ tags:['1px','高清屏','DPR'],
+ fu:[{q:`追问：为什么 1px 在高清屏上看起来更粗？`, a:`CSS 像素是逻辑像素。DPR 为 2 时，1 个 CSS 像素由 2 乘 2 个物理像素渲染，视觉上就比设备的物理最小单位粗一倍，细边框的"精致感"就丢了。`},
+   {q:`追问：transform: scale(0.5) 方案有什么局限？`, a:`需要配合伪元素和 transform-origin，且缩放后的半像素可能被取整出现虚化；它固定缩一半，在 DPR 为 3 的机型上仍不够细。更严谨的做法是按 DPR 用媒体查询分别处理。`},
+   {q:`追问：还有别的替代方案吗？`, a:`用 rem 配合动态根字号（按视口宽度计算），或者用 box-shadow、outline 模拟细边，也可以直接用 0.5px 加特性检测。趋势是少画 1px 边框，改用间距和色块区分层级。`}]},
+
 
 {c:'css', lv:'基础', q:'position 有哪些取值？分别是什么定位行为？',
  h:'static / relative / absolute / fixed / sticky，重点是各自的参照物。',
@@ -655,7 +821,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>sticky：</b>粘性定位，在正常流中，滚动到阈值前相当于 relative，超过后相当于 fixed。必须指定 top/left 等阈值才生效，且父容器不能是 overflow: hidden（否则粘性范围被限制）。</li>
 </ul>
 <pre><code>.header { position: sticky; top: 0; z-index: 10; }</code></pre>
-<p><b>顺带：</b>z-index 只在已定位元素或 flex/grid 子项上生效，且受层叠上下文影响——父元素创建了层叠上下文后，子元素再大的 z-index 也压不过另一个上下文的父级。</p>`},
+<p><b>顺带：</b>z-index 只在已定位元素或 flex/grid 子项上生效，且受层叠上下文影响——父元素创建了层叠上下文后，子元素再大的 z-index 也压不过另一个上下文的父级。</p>`,
+ tags:['position','定位','层叠上下文'],
+ fu:[{q:`追问：absolute 是相对谁定位的？`, a:`相对最近的"已定位祖先"（position 不为 static）的内边距盒；找不到就相对初始包含块。很多人直接答"相对父元素"，漏掉"已定位"这个前提就是错的。`},
+   {q:`追问：fixed 一定相对视口吗？`, a:`不一定。祖先元素上有 transform、filter、perspective、will-change、contain 这些属性时，该祖先会成为包含块，fixed 退化成相对它定位。这是移动端弹窗定位错位的常见原因。`},
+   {q:`追问：z-index 为什么有时候不生效？`, a:`z-index 只对已定位元素或参与层叠上下文的元素有效；更重要的是父级一旦形成层叠上下文，子元素的 z-index 就无法跨出父级的层叠顺序——这就是"设了 9999 还是被盖住"的原因。`}]},
+
 
 {c:'css', lv:'进阶', q:'Flex 和 Grid 分别适合什么场景？',
  h:'一维 vs 二维是关键区别。',
@@ -670,7 +841,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 /* Flex 导航 */
 .nav { display: flex; align-items: center; gap: 12px; }
 .nav .logo { margin-right: auto; }  /* 把后续元素推到右侧 */</code></pre>
-<p><b>选择标准：</b>内容驱动布局（元素决定尺寸与排列）用 Flex；布局驱动内容（先定网格再填内容）用 Grid。两者可以嵌套组合，实际项目里经常一起用。</p>`},
+<p><b>选择标准：</b>内容驱动布局（元素决定尺寸与排列）用 Flex；布局驱动内容（先定网格再填内容）用 Grid。两者可以嵌套组合，实际项目里经常一起用。</p>`,
+ tags:['grid','flex','布局选型'],
+ fu:[{q:`追问：什么场景必须用 Grid？`, a:`需要同时控制行和列、二维对齐时，比如仪表盘、卡片矩阵、页面整体骨架。Flex 是单维分配，跨行对齐要靠嵌套多个容器才能做到，这种场景 Grid 表达力明显更强。`},
+   {q:`追问：Grid 的 fr 和 Flex 的 flex: 1 有什么不同？`, a:`fr 是网格轨道的自由空间单位，按轨道分配；flex 是主轴上的弹性伸缩。fr 会自动扣除 gap，而且行与列的分配相互独立，不需要像 Flex 那样嵌套就能实现二维布局。`},
+   {q:`追问：两者可以混用吗？`, a:`可以，而且推荐。外层用 Grid 划分页面骨架，内部组件用 Flex 排列内容，是目前的主流做法。能对比着答比"二选一"更能体现理解。`}]},
+
 
 {c:'css', lv:'基础', q:'为什么要清除浮动？有哪些清除浮动的方式？',
  h:'浮动元素会脱离文档流导致父元素高度塌陷。',
@@ -682,7 +858,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 /* 更现代：display: table 兼容老浏览器 */</code></pre>
 <p><b>方案二：父元素 BFC</b>——设 <code>overflow: hidden</code> 或 <code>display: flow-root</code>。flow-root 是最干净的做法，不产生溢出裁剪副作用。</p>
 <p><b>方案三：空标签</b>——在末尾加 &lt;div style="clear:both"&gt;，会引入无意义标签，不推荐。</p>
-<p><b>更根本的建议：</b>现代布局优先用 Flex / Grid，它们天然形成独立格式化上下文，不产生塌陷问题。</p>`},
+<p><b>更根本的建议：</b>现代布局优先用 Flex / Grid，它们天然形成独立格式化上下文，不产生塌陷问题。</p>`,
+ tags:['浮动','清除浮动','BFC'],
+ fu:[{q:`追问：浮动最初是做什么的？现在还需要吗？`, a:`最初是给文字环绕图片用的，后来被大量借去做多列布局。现在多列布局交给 flex 和 grid，浮动的剩余价值主要在图文环绕和少量兼容场景。`},
+   {q:`追问：clearfix 里为什么要加 display: table？`, a:`伪元素设为 table 会生成一个块级盒，让父元素能正确计算含浮动子元素的高度；加 ::before 版则是为了防止顶部外边距折叠。现代可以用 display: flow-root 一行替代。`},
+   {q:`追问：clear: both 和 BFC 清除浮动的原理一样吗？`, a:`不一样。clear: both 是给元素加约束——它的上边界不能与前面的浮动元素相邻，于是被挤到下方；BFC 是让容器把浮动子元素纳入高度计算。前者解决排列，后者解决高度塌陷。`}]},
+
 
 /* ---------- 浏览器与网络 ---------- */
 {c:'net', lv:'高频', q:'在浏览器地址栏输入 URL 回车后，发生了什么？',
@@ -696,7 +877,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>浏览器解析渲染：</b>HTML 解析成 DOM 树，CSS 解析成 CSSOM 树，合成渲染树；然后布局（layout）、绘制（paint）、合成（composite）上屏。JS 会阻塞 HTML 解析（除非加 defer / async）。</li>
 <li><b>连接管理：</b>HTTP/1.1 默认 keep-alive 复用连接，标签页关闭或超时后四次挥手断开。</li>
 </ol>
-<p><b>回答技巧：</b>这题没有标准答案长度，面试官想看你能深入到哪一层。建议按主线讲清楚，然后主动挑一两个环节（如 DNS、渲染流程）深入，并点出可优化点。</p>`},
+<p><b>回答技巧：</b>这题没有标准答案长度，面试官想看你能深入到哪一层。建议按主线讲清楚，然后主动挑一两个环节（如 DNS、渲染流程）深入，并点出可优化点。</p>`,
+ tags:['导航流程','渲染流水线','阻塞'],
+ fu:[{q:`追问：DNS 查询经历了哪几步？`, a:`浏览器缓存 → 系统缓存（含 hosts）→ 路由器与运营商 DNS 缓存 → 递归查询根域名服务器 → 顶级域 → 权威域名服务器。拿到 IP 后再建立 TCP 连接。`},
+   {q:`追问：浏览器的渲染关键路径是什么？`, a:`HTML 解析成 DOM，CSS 解析成 CSSOM，合成渲染树；接着布局（Layout）算几何、绘制（Paint）生成指令、合成（Composite）上屏。CSS 是渲染阻塞资源，脚本默认阻塞解析，除非用 defer 或 async。`},
+   {q:`追问：为什么说 DOM 操作慢？`, a:`慢的不是 DOM 本身，而是它触发的样式计算、布局与绘制。批量操作、用文档片段、或先用虚拟 DOM 做 diff，本质都是在减少这些阶段的执行次数。`}]},
+
 
 {c:'net', lv:'高频', q:'HTTP 缓存机制是怎样的？强缓存和协商缓存的区别是什么？',
  h:'核心是几组响应头：Cache-Control、Expires、ETag、Last-Modified，以及状态码 200 / 304 的区别。',
@@ -711,7 +897,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><code>Last-Modified</code> / <code>If-Modified-Since</code>：最后修改时间，秒级精度，文件在秒内多次修改会判断失误。</li>
 </ul>
 <p><b>缓存位置优先级：</b>Memory Cache → Disk Cache → 协商缓存 → 请求网络。</p>
-<p><b>工程实践：</b>HTML 用 no-cache（每次都校验，保证拿到最新入口），带 hash 的静态资源用 max-age=31536000, immutable（一年不过期）。这样发版时入口文件更新，资源文件名变化自动失效。</p>`},
+<p><b>工程实践：</b>HTML 用 no-cache（每次都校验，保证拿到最新入口），带 hash 的静态资源用 max-age=31536000, immutable（一年不过期）。这样发版时入口文件更新，资源文件名变化自动失效。</p>`,
+ tags:['强缓存','协商缓存','Cache-Control'],
+ fu:[{q:`追问：Cache-Control 有哪些常用指令？`, a:`max-age 是相对过期时间；no-cache 表示可缓存但每次都要校验；no-store 完全不缓存；immutable 用于带 hash 的静态资源，表示内容永不变化；public / private 控制是否允许共享缓存。`},
+   {q:`追问：为什么现在更推荐 Cache-Control 而不是 Expires？`, a:`Expires 是绝对时间，依赖客户端时钟，时钟不准就判断失误；Cache-Control 用相对时长，不受时钟影响，表达力也更强。Expires 现在主要作为兼容老客户端的兜底。`},
+   {q:`追问：发版后用户还看到旧页面，怎么解决？`, a:`入口 HTML 用 no-cache 或协商缓存，保证每次校验；带 hash 的静态资源用长强缓存加 immutable。这样发版时 HTML 变化会带动资源引用更新，既避免脏缓存又能长期缓存资源。`}]},
+
 
 {c:'net', lv:'高频', q:'什么是跨域？CORS 是怎么解决的？',
  h:'根源是同源策略，解决方案的核心是响应头。要能说清简单请求和预检请求的差别。',
@@ -724,7 +915,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 </ul>
 <p><b>简单请求 vs 预检：</b>满足"方法为 GET/POST/HEAD + 头在安全列表内 + Content-Type 为三种之一"的是简单请求，直接发出。否则浏览器先发一个 <b>OPTIONS 预检请求</b>，通过后才发真实请求。预检结果可被 <code>Access-Control-Max-Age</code> 缓存。</p>
 <p><b>其他方案：</b>开发环境用 devServer 代理（Vite / webpack 的 proxy）最常用；JSONP 只支持 GET 且是历史方案；Nginx 反向代理；postMessage 用于窗口间通信。</p>
-<p><b>经典坑：</b>跨域报错时服务端其实收到并处理了请求（比如删除了数据），只是响应被浏览器拦截。所以涉及写操作的接口要配合预检与 CSRF 防护。</p>`},
+<p><b>经典坑：</b>跨域报错时服务端其实收到并处理了请求（比如删除了数据），只是响应被浏览器拦截。所以涉及写操作的接口要配合预检与 CSRF 防护。</p>`,
+ tags:['跨域','CORS','同源策略'],
+ fu:[{q:`追问：什么是简单请求？预检请求什么时候发？`, a:`简单请求需同时满足：方法是 GET / HEAD / POST，且请求头只含安全字段（Content-Type 限于三种值等）。不满足就会先发 OPTIONS 预检，服务端需要返回 Allow-Origin、Allow-Methods、Allow-Headers 才能继续。`},
+   {q:`追问：请求发出去了但控制台报跨域，为什么？`, a:`拦截发生在浏览器这一侧：请求可能已经到达服务端并产生了副作用，只是响应没通过浏览器的 CORS 校验。所以不能把跨域当成服务端的防护手段。`},
+   {q:`追问：CORS 里怎么带上 Cookie？`, a:`前端要开启凭证（fetch 的 credentials 设为 include，或 XHR 的 withCredentials 置 true），服务端必须返回 Allow-Credentials: true，且 Allow-Origin 不能是通配符，必须是具体来源。`}]},
+
 
 {c:'net', lv:'进阶', q:'TCP 三次握手和四次挥手的过程是怎样的？为什么是三次和四次？',
  h:'关键在"确认双方收发能力"和"半关闭"这两个概念。',
@@ -743,7 +939,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li>客户端回 ACK，进入 TIME_WAIT，等待 2MSL 后关闭</li>
 </ol>
 <p><b>为什么是四次：</b>TCP 是全双工的，关闭需要两个方向分别进行。服务端收到 FIN 时可能还有数据没发完，所以 ACK 和 FIN 不能合并。</p>
-<p><b>TIME_WAIT 为什么等 2MSL：</b>确保最后的 ACK 能到达服务端（丢失时可重传对方的 FIN），并让本次连接的残留报文在网络中消失，避免影响新连接。</p>`},
+<p><b>TIME_WAIT 为什么等 2MSL：</b>确保最后的 ACK 能到达服务端（丢失时可重传对方的 FIN），并让本次连接的残留报文在网络中消失，避免影响新连接。</p>`,
+ tags:['TCP','三次握手','四次挥手'],
+ fu:[{q:`追问：为什么握手要三次而不是两次？`, a:`为了确认双方的收发能力，并防止历史失效的连接请求让服务端白白分配资源。两次的话，服务端无法确认自己发出的报文客户端能收到。`},
+   {q:`追问：为什么挥手是四次？`, a:`TCP 是全双工。主动关闭方停止发送后，被动方可能还有数据没发完，所以 ACK 和 FIN 不能合并，要分开发，于是四次。`},
+   {q:`追问：TIME_WAIT 为什么要等 2MSL？`, a:`一是保证最后那个 ACK 能到达对端（丢了的话对端会重发 FIN，本端还能重传），二是让本次连接的报文在网络中彻底消散，避免影响复用同端口的新连接。`}]},
+
 
 {c:'net', lv:'进阶', q:'HTTP/1.1、HTTP/2、HTTP/3 有什么区别？',
  h:'从连接复用、头部压缩、传输层协议三个角度说。',
@@ -757,7 +958,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li>仍存在<b>TCP 层队头阻塞</b>：一个包丢了，后面的包都要等重传。</li>
 </ul>
 <p><b>HTTP/3：</b>改用 <b>QUIC</b>（基于 UDP）。解决了 TCP 层的队头阻塞（各流独立），握手更快（0-RTT / 1-RTT），连接迁移支持网络切换不中断（从 WiFi 切到 4G 时保持连接）。代价是 UDP 在部分网络环境被限制。</p>
-<p><b>工程影响：</b>HTTP/2 下不需要再做资源合并与域名分片，反而应该拆细资源以利于缓存。降级策略需要保留。</p>`},
+<p><b>工程影响：</b>HTTP/2 下不需要再做资源合并与域名分片，反而应该拆细资源以利于缓存。降级策略需要保留。</p>`,
+ tags:['HTTP2','HTTP3','多路复用'],
+ fu:[{q:`追问：HTTP/1.1 的队头阻塞是什么？`, a:`单条 TCP 连接上请求是串行的，前一个响应没回来后面的就得等。浏览器靠开多条并发连接缓解，但连接本身有开销，且受同域名并发数限制。`},
+   {q:`追问：HTTP/2 的多路复用彻底解决队头阻塞了吗？`, a:`应用层解决了，传输层没有。所有流复用一条 TCP 连接，一旦某个 TCP 报文丢失，整条连接上的所有流都要等它重传，这就是 TCP 层队头阻塞。`},
+   {q:`追问：HTTP/3 为什么改用 UDP？`, a:`基于 QUIC，把可靠性、流控、加密放到用户态实现，流与流之间的丢包互不影响，真正做到无队头阻塞；同时支持 0-RTT 建连降低延迟。代价是中间设备兼容性和部分网络对 UDP 的限制。`}]},
+
 
 {c:'net', lv:'基础', q:'cookie、localStorage、sessionStorage、IndexedDB 有什么区别？',
  h:'从容量、生命周期、是否随请求发送、是否阻塞主线程四个维度对比。',
@@ -767,7 +973,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>sessionStorage：</b>约 5MB，仅在当前标签页会话内有效，关闭标签页即清空。适合表单草稿、多步流程的临时状态。</li>
 <li><b>IndexedDB：</b>容量大（通常几百 MB 到 GB 级，取决于配额），异步 API，支持索引、事务、二进制存储。适合离线应用、大量结构化数据缓存。</li>
 </ul>
-<p><b>选择建议：</b>登录凭证优先用 HttpOnly cookie；主题、语言等偏好设置用 localStorage；大文件与离线数据用 IndexedDB。</p>`},
+<p><b>选择建议：</b>登录凭证优先用 HttpOnly cookie；主题、语言等偏好设置用 localStorage；大文件与离线数据用 IndexedDB。</p>`,
+ tags:['localStorage','Cookie','存储'],
+ fu:[{q:`追问：localStorage 有哪些坑？`, a:`同步 API 会阻塞主线程；只能存字符串，对象要序列化；容量约 5MB；同源共享且永不过期，容易残留敏感数据；无痕模式下可能受限。`},
+   {q:`追问：Cookie 为什么每次请求都会带上？`, a:`它被设计成维持状态的凭证，同源请求会自动携带（作用范围由 Domain 和 Path 控制）。所以不适合存大数据，而且要关注 CSRF 风险。`},
+   {q:`追问：token 存哪里才对？`, a:`没有完美方案，只有权衡：localStorage 简单但怕 XSS 窃取；httpOnly Cookie 防 XSS 读取但要处理 CSRF；内存变量最安全但刷新即丢。生产上常见做法是 httpOnly Cookie 配合 SameSite 与 CSRF token。`}]},
+
 
 {c:'net', lv:'基础', q:'GET 和 POST 有什么区别？',
  h:'不要只会说"一个在 URL 一个在 body"，重点讲语义、幂等、缓存、安全。',
@@ -778,7 +989,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>编码：</b>GET 只支持 URL 编码；POST 支持 application/x-www-form-urlencoded、multipart/form-data（文件上传）、application/json 等多种格式。</li>
 <li><b>浏览器行为：</b>GET 请求可被浏览器主动重试与缓存；POST 刷新页面会提示重复提交。</li>
 </ul>
-<p><b>总结一句：</b>区别源于语义约定与技术实现的差异，RESTful 设计里应严格遵守方法语义。</p>`},
+<p><b>总结一句：</b>区别源于语义约定与技术实现的差异，RESTful 设计里应严格遵守方法语义。</p>`,
+ tags:['GET','POST','HTTP方法'],
+ fu:[{q:`追问：GET 和 POST 在语义上的区别是什么？`, a:`GET 是安全且幂等的查询，POST 是提交数据、可能改变服务端状态、非幂等。这个语义差别比"参数放哪"更重要，也是 RESTful 设计的基础。`},
+   {q:`追问：POST 比 GET 安全吗？`, a:`不是。两者在 HTTP 层都是明文，安全性取决于是否用了 HTTPS。POST 的参数不在 URL 里，只是减少了被日志、浏览器历史、Referer 记录的风险。`},
+   {q:`追问：RESTful 场景下怎么选？`, a:`按语义来：查询用 GET，新建用 POST，全量更新用 PUT，部分更新用 PATCH，删除用 DELETE。别用 GET 做有副作用的操作，否则可能被预取或爬虫误触发。`}]},
+
 
 {c:'net', lv:'基础', q:'常见的 HTTP 状态码有哪些？各自代表什么含义？',
  h:'按 2xx / 3xx / 4xx / 5xx 分类回答，每类给最典型的几个。',
@@ -788,7 +1004,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>4xx 客户端错误：</b>400 请求参数错误；401 未认证（未登录）；403 无权限（已登录但不允许）；404 资源不存在；405 方法不允许；413 请求体过大；429 请求过多（限流）。</li>
 <li><b>5xx 服务端错误：</b>500 服务器内部错误；502 Bad Gateway（网关收到上游无效响应）；503 服务不可用（过载或维护）；504 网关超时。</li>
 </ul>
-<p><b>易混淆点：</b>401 是"你是谁"，403 是"知道你是谁但不让你看"。502 是上游返回垃圾，504 是上游没按时回，两者都指向后端或网关，而不是客户端。</p>`},
+<p><b>易混淆点：</b>401 是"你是谁"，403 是"知道你是谁但不让你看"。502 是上游返回垃圾，504 是上游没按时回，两者都指向后端或网关，而不是客户端。</p>`,
+ tags:['状态码','HTTP','调试'],
+ fu:[{q:`追问：301 和 302 的区别？对 SEO 有什么影响？`, a:`301 是永久重定向，浏览器和搜索引擎会缓存并传递权重；302 是临时重定向，不传递权重。换域名用 301，临时维护用 302 或 307。`},
+   {q:`追问：304 是怎么产生的？`, a:`浏览器带上协商缓存标识（If-None-Match / If-Modified-Since）请求，服务端判断资源未变，返回 304 且不带响应体，浏览器直接复用本地缓存。这是"成功但没有传输内容"的典型场景。`},
+   {q:`追问：502 和 504 分别怎么排查？`, a:`502 是网关从上游收到了无效响应——后端崩了、端口不通、进程正在重启；504 是网关等上游超时——后端处理太慢或阻塞。前者查后端进程与健康检查，后者查慢接口和超时配置。`}]},
+
 
 {c:'net', lv:'进阶', q:'XSS 和 CSRF 分别是什么？如何防御？',
  h:'XSS 是"注入脚本窃取数据"，CSRF 是"借用你的身份伪造请求"。',
@@ -801,7 +1022,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <ul>
 <li><b>防御：</b>校验 Origin / Referer；使用 CSRF Token（服务端下发，请求时带上比对）；SameSite Cookie 属性（Lax 或 Strict）；关键操作要求二次验证（密码、短信验证码）。</li>
 </ul>
-<p><b>框架现状：</b>Vue / React 默认会转义插值内容，天然缓解 XSS，但 dangerouslySetInnerHTML 和 v-html 仍是高风险入口。SameSite 默认 Lax 已大幅缓解 CSRF，但跨站表单提交等场景仍需 Token。</p>`},
+<p><b>框架现状：</b>Vue / React 默认会转义插值内容，天然缓解 XSS，但 dangerouslySetInnerHTML 和 v-html 仍是高风险入口。SameSite 默认 Lax 已大幅缓解 CSRF，但跨站表单提交等场景仍需 Token。</p>`,
+ tags:['XSS','CSRF','Web安全'],
+ fu:[{q:`追问：XSS 有哪几种类型？`, a:`存储型——恶意内容入库，所有访客都会中招，危害最大；反射型——通过链接参数即时触发；DOM 型——前端把不可信数据直接写进 innerHTML 这类危险位置。`},
+   {q:`追问：防 XSS 的核心手段是什么？`, a:`输出转义（按 HTML、属性、JS、URL 等上下文分别处理）、避免用 innerHTML 改用 textContent、配置 CSP 限制脚本来源、富文本用白名单过滤（如 DOMPurify）。输入过滤只能算辅助。`},
+   {q:`追问：httpOnly Cookie 能防 XSS 吗？`, a:`不能。它只阻止脚本读取 Cookie，脚本仍能在页面里执行任意操作。它防的是凭证被窃取，本质上是对 CSRF 一类攻击的缓解，不能替代 XSS 防护。`}]},
+
 
 {c:'net', lv:'基础', q:'什么是浏览器同源策略？它限制了哪些行为？',
  h:'"同源"指协议 + 域名 + 端口完全一致；限制的是读取，而不是发送。',
@@ -819,7 +1045,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li>表单可以跨域提交</li>
 <li>页面可以跳转到其他域名</li>
 </ul>
-<p><b>绕开限制的正规手段：</b>CORS、postMessage、Nginx 反向代理、WebSocket（不受同源策略限制，但服务端需校验 Origin）。</p>`},
+<p><b>绕开限制的正规手段：</b>CORS、postMessage、Nginx 反向代理、WebSocket（不受同源策略限制，但服务端需校验 Origin）。</p>`,
+ tags:['同源策略','安全边界','跨域'],
+ fu:[{q:`追问：同源的判定标准是什么？`, a:`协议、域名、端口三者完全相同。所以 http 与 https 不同源，example.com 与 www.example.com 也不同源。用 document.domain 放宽子域限制的老做法已被主流浏览器废弃。`},
+   {q:`追问：哪些行为受同源策略限制，哪些不受？`, a:`受限制：fetch / XHR 读取响应、读取跨域 iframe 的 DOM、访问跨域 Cookie。不受限制：img、script、link 等标签可以加载跨域资源（JSONP 正是利用这点），表单也可以跨域提交。`},
+   {q:`追问：开发环境怎么绕开跨域？`, a:`用构建工具的 proxy（Vite 的 server.proxy、webpack-dev-server 的 proxy）把请求转发给后端，浏览器看到的是同源请求。这只是开发期方案，生产要靠 Nginx 反代或后端配置 CORS。`}]},
+
 
 {c:'net', lv:'进阶', q:'HTTPS 的握手过程是怎样的？为什么能保证安全？',
  h:'对称加密 + 非对称加密结合，加上证书体系防止中间人。',
@@ -834,7 +1065,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 </ol>
 <p><b>为什么要混合加密：</b>非对称加密安全但计算慢，用于安全地协商密钥；对称加密快，用于传输数据。</p>
 <p><b>证书的作用：</b>由受信任的 CA 用私钥签名，客户端用 CA 公钥验签，确认服务端公钥确实属于该域名，防止中间人替换公钥。</p>
-<p><b>TLS 1.3 优化：</b>握手压缩到 1-RTT（会话复用可 0-RTT），移除了不安全的加密套件，前向安全性更好。</p>`},
+<p><b>TLS 1.3 优化：</b>握手压缩到 1-RTT（会话复用可 0-RTT），移除了不安全的加密套件，前向安全性更好。</p>`,
+ tags:['HTTPS','TLS','加密'],
+ fu:[{q:`追问：对称加密和非对称加密分别用在哪一步？`, a:`握手阶段用非对称加密（或密钥交换算法）安全地协商出会话密钥，之后的数据传输用对称加密。原因是对称加密快得多，而非对称只用来解决密钥分发问题。`},
+   {q:`追问：数字证书解决了什么问题？`, a:`解决"公钥是不是真的属于这个网站"。证书由 CA 用私钥签名，浏览器用内置的 CA 公钥验签，从而确认服务器身份，防止中间人替换公钥。`},
+   {q:`追问：TLS 1.3 做了哪些改进？`, a:`握手从 2-RTT 降到 1-RTT，会话复用可以 0-RTT；砍掉了不安全的算法（如 RSA 密钥交换、CBC 模式）；只保留具备前向安全的密钥交换方案。`}]},
+
 
 /* ---------- Vue / React ---------- */
 {c:'fw', lv:'高频', q:'Vue2 和 Vue3 的响应式原理有什么区别？',
@@ -861,7 +1097,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
     return res;
   }
 });</code></pre>
-<p><b>顺带：</b>Vue3 还引入 effectScope、shallowRef / shallowReactive 供性能优化选择。</p>`},
+<p><b>顺带：</b>Vue3 还引入 effectScope、shallowRef / shallowReactive 供性能优化选择。</p>`,
+ tags:['响应式原理','Proxy'],
+ fu:[{q:`追问：Object.defineProperty 的缺陷具体是什么？`, a:`只能劫持已存在的属性：新增和删除属性检测不到（Vue2 要用 Vue.set / Vue.delete 补），数组的下标修改和 length 变化也检测不到（Vue2 靠重写数组的 7 个方法打补丁）；而且深层对象要递归遍历，初始化开销大。`},
+   {q:`追问：Proxy 就没有缺点吗？`, a:`有。它只能代理对象，不支持 IE；深层嵌套是惰性代理，访问到才递归包装；把代理对象直接序列化或交给某些第三方库时，可能出现预期外的行为；频繁的深层代理也有运行时开销。`},
+   {q:`追问：ref 和 reactive 有什么区别？`, a:`ref 能包装原始值，内部通过 value 访问器实现；reactive 只能接收对象。解构 reactive 会丢响应式（取的是值而不是引用），ref 解构后仍是响应式的，或者用 toRefs 保持连接。`}]},
+
 
 {c:'fw', lv:'基础', q:'v-if 和 v-show 有什么区别？应该怎么选？',
  h:'一个控制 DOM 是否存在，一个控制 CSS 的 display。',
@@ -870,7 +1111,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><b>v-show：</b>元素始终渲染，通过切换 display: none 控制显隐。切换开销小，但初始渲染开销不变，不支持 v-else。</li>
 </ul>
 <p><b>选择依据：</b>频繁切换用 v-show（如 Tab 切换、折叠面板）；初始条件不满足的概率高、或需要控制组件生命周期用 v-if（如权限控制、弹窗内容懒加载）。</p>
-<p><b>易错点：</b>v-if 与 v-for 不应同时使用在同一元素上，Vue3 中 v-if 优先级高于 v-for，会导致访问不到循环变量而报错。正确做法是外层套 template 或对计算后的数组用 v-for。</p>`},
+<p><b>易错点：</b>v-if 与 v-for 不应同时使用在同一元素上，Vue3 中 v-if 优先级高于 v-for，会导致访问不到循环变量而报错。正确做法是外层套 template 或对计算后的数组用 v-for。</p>`,
+ tags:['v-if','v-show','渲染开销'],
+ fu:[{q:`追问：v-if 和 v-for 为什么不能放在同一元素上？`, a:`Vue2 里 v-for 优先级高于 v-if，会先渲染整个列表再逐项判断，浪费性能；Vue3 里 v-if 优先级更高，访问不到 v-for 的迭代变量会直接报错。正确做法是把 v-if 提到外层容器，或用 computed 先过滤数据。`},
+   {q:`追问：v-show 为什么不支持 template 和 v-else？`, a:`v-show 靠切换 CSS 的 display 实现，必须作用在真实元素上；template 是编译期的包裹标签，不渲染成真实 DOM。v-else 也依赖 v-if 的条件分支结构，v-show 没有这套机制。`},
+   {q:`追问：频繁切换场景下性能差异有多大？`, a:`v-if 每次切换都要销毁和重建组件，会触发完整生命周期；v-show 只改样式，切换开销极小。但 v-show 无论条件真假都会首次渲染，所以"首屏不该渲染的重内容"反而要用 v-if。`}]},
+
 
 {c:'fw', lv:'高频', q:'v-for 中的 key 有什么作用？为什么不能用 index？',
  h:'key 是虚拟 DOM diff 时判断节点是否可复用的依据。',
@@ -886,7 +1132,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 
 &lt;!-- 正确 --&gt;
 &lt;li v-for="item in list" :key="item.id"&gt;</code></pre>
-<p><b>例外：</b>纯静态展示、列表不会发生增删排序时，用 index 影响不大，但从工程规范上仍建议用唯一 id。</p>`},
+<p><b>例外：</b>纯静态展示、列表不会发生增删排序时，用 index 影响不大，但从工程规范上仍建议用唯一 id。</p>`,
+ tags:['key','diff','虚拟DOM'],
+ fu:[{q:`追问：为什么用 index 当 key 会出问题？`, a:`index 不稳定：插入或删除会让后续元素的 index 整体变化，diff 时误判为"内容变了"，复用错误的 DOM——典型表现是输入框内容跟着串位、组件内部状态错乱。只有列表完全静态时才勉强可用。`},
+   {q:`追问：key 一定要唯一吗？`, a:`要，且必须在同一层兄弟节点中唯一。重复的 key 会让 diff 无法正确匹配节点。首选后端返回的稳定 id，其次是稳定且有业务含义的字段。`},
+   {q:`追问：React 的 key 和 Vue 的作用一样吗？`, a:`目的一样，都是帮 diff 识别节点身份，机制略有差别：Vue3 的 diff 用最长递增子序列求最小移动次数，React 是同层比较的启发式算法。两者都不建议用随机数做 key，那等于每次都重建。`}]},
+
 
 {c:'fw', lv:'基础', q:'Vue3 有哪些生命周期钩子？和 Vue2 的对应关系是什么？',
  h:'setup 取代了 beforeCreate / created，其余钩子加 on 前缀并注册在 setup 内。',
@@ -899,7 +1150,12 @@ flex: none  → 0 0 auto（元素保持自身尺寸）</code></pre>
 <li><code>onErrorCaptured</code>：捕获后代组件错误。</li>
 </ul>
 <p><b>对应关系：</b>Vue2 的 beforeCreate 与 created 被 setup 取代——setup 在组件实例创建前执行，此时的逻辑等价于 created 阶段，所以数据初始化直接写在 setup 里。</p>
-<p><b>使用注意：</b>Composition API 的钩子必须同步注册在 setup 顶层，不能写在异步回调或条件分支里，否则会导致钩子绑定到错误的实例上。</p>`},
+<p><b>使用注意：</b>Composition API 的钩子必须同步注册在 setup 顶层，不能写在异步回调或条件分支里，否则会导致钩子绑定到错误的实例上。</p>`,
+ tags:['生命周期','Vue3'],
+ fu:[{q:`追问：onMounted 里能拿到真实 DOM 了吗？`, a:`能，mounted 时组件已挂载，ref 已指向真实 DOM。但如果元素在 v-if 内部或属于异步组件，这时可能是 null，需要在数据就绪后用 nextTick 再取。`},
+   {q:`追问：请求为什么一般发在 onMounted 而不是 setup 顶层？`, a:`setup 执行时组件还没挂载，DOM 不可用；而且在 SSR 场景下 setup 顶层会在服务端执行，可能引发重复请求或依赖浏览器 API 报错。异步请求放 onMounted 语义最清晰，也便于配合 loading 状态。`},
+   {q:`追问：onUnmounted 里通常要做什么？`, a:`清理副作用：清定时器、解绑挂在 window / document 上的监听、用 AbortController 取消未完成的请求、断开 WebSocket 或 EventSource、取消订阅。漏掉这些是内存泄漏的高发点。`}]},
+
 
 {c:'fw', lv:'高频', q:'computed 和 watch 有什么区别？分别适合什么场景？',
  h:'一个是"派生状态"，一个是"副作用"。',
@@ -915,7 +1171,12 @@ const total = computed(() =&gt; items.value.reduce((s, i) =&gt; s + i.price, 0))
 watch(keyword, async (val, old) =&gt; {
   if (val !== old) list.value = await search(val);
 }, { immediate: true });</code></pre>
-<p><b>选择标准：</b>只是想要一个新值 → computed；想要"数据变化时做点事" → watch。不要用 watch 去模拟 computed，那会带来额外的手动赋值与状态不同步风险。</p>`},
+<p><b>选择标准：</b>只是想要一个新值 → computed；想要"数据变化时做点事" → watch。不要用 watch 去模拟 computed，那会带来额外的手动赋值与状态不同步风险。</p>`,
+ tags:['computed','watch','缓存'],
+ fu:[{q:`追问：computed 的缓存是怎么实现的？`, a:`靠依赖收集加脏标记：首次求值后缓存结果，只有依赖的响应式数据变化时才标记为脏，下次访问才重新计算。所以依赖没变时，多次访问不会重复执行函数体。`},
+   {q:`追问：什么情况必须用 watch 而不能用 computed？`, a:`需要执行副作用时：发请求、操作 DOM、写 localStorage、打日志。computed 应该是纯函数，不产生副作用，否则会带来难以追踪的重复执行。`},
+   {q:`追问：watch 的 immediate 和 deep 分别有什么用？`, a:`immediate 让回调在初始化时立即执行一次，适合初始化就要拉数据；deep 用于监听对象内部属性的变化，但开销大，监听对象时更推荐写成 getter 形式，精确指定要观察的字段。`}]},
+
 
 {c:'fw', lv:'基础', q:'Vue 组件之间有哪些通信方式？',
  h:'按关系分类：父子、兄弟、跨层级。',
@@ -928,7 +1189,12 @@ watch(keyword, async (val, old) =&gt; {
 <li><b>任意组件：</b>全局状态管理——Pinia（Vue3 推荐）/ Vuex。Vue2 中还有 EventBus（$emit / $on），Vue3 移除了 $on，需用 mitt 等库替代。</li>
 <li><b>其他：</b>v-model 双向绑定本质是 props + emit 的语法糖；$attrs / $listeners 用于透传；插槽用于传递内容。</li>
 </ul>
-<p><b>选择建议：</b>能用 props / emit 就别上状态管理；跨层级且是配置类数据用 provide / inject；业务共享状态用 Pinia。</p>`},
+<p><b>选择建议：</b>能用 props / emit 就别上状态管理；跨层级且是配置类数据用 provide / inject；业务共享状态用 Pinia。</p>`,
+ tags:['组件通信','props','emit'],
+ fu:[{q:`追问：provide / inject 有什么注意点？`, a:`注入的值默认不是响应式的（传对象则对象本身是响应式的，但整体替换不会触发更新），需要配合 ref 或 computed；另外它不做数据流向追踪，层级太深会让依赖关系变得隐晦，要克制使用。`},
+   {q:`追问：兄弟组件之间怎么通信？`, a:`提到共同父组件用 props 和 emit 中转，或用状态管理（Pinia），也可以用 mitt 这类事件总线。注意 Vue3 移除了实例上的 $on / $emit，不能再像 Vue2 那样拿一个空实例当总线。`},
+   {q:`追问：组件上的 v-model 做了什么？`, a:`是语法糖：Vue3 默认展开为 modelValue 属性加 update:modelValue 事件；Vue2 是 value 加 input。它支持具名形式（如 v-model:title），也支持自定义修饰符，通过 modelModifiers 接收。`}]},
+
 
 {c:'fw', lv:'进阶', q:'React Hooks 有哪些使用规则？为什么不能写在条件语句里？',
  h:'规则源于链表存储结构：Hook 的调用顺序必须稳定。',
@@ -945,7 +1211,12 @@ if (visible) { const [x, setX] = useState(0); }
 // 正确：条件放在 Hook 内部
 const [x, setX] = useState(0);
 if (!visible) return null;</code></pre>
-<p><b>配套工具：</b>ESLint 插件 eslint-plugin-react-hooks 会在编译期校验这两条规则，建议始终开启。</p>`},
+<p><b>配套工具：</b>ESLint 插件 eslint-plugin-react-hooks 会在编译期校验这两条规则，建议始终开启。</p>`,
+ tags:['Hooks','调用顺序','fiber'],
+ fu:[{q:`追问：Hooks 的底层实现是什么？`, a:`每个函数组件在 fiber 节点上对应一条 Hook 链表，按调用顺序依次存取。所以顺序一旦变化，取到的就是别的 Hook 的状态——这就是规则背后的原因，而不是"React 随便定的"。`},
+   {q:`追问：为什么不能在条件里调用，却可以在自定义 Hook 里调用？`, a:`自定义 Hook 是被复用的函数，只要它自身在每次渲染中都以相同顺序执行 Hooks，就满足规则。真正禁止的是"运行时可能跳过某次 Hook 调用"的条件分支。`},
+   {q:`追问：用了 Hooks 的组件为什么必须是函数组件？`, a:`Hooks 依赖函数组件的渲染模型——每次渲染就是一次函数调用，配合 fiber 节点保存 Hook 状态。类组件的实例模型无法承载这套机制，也无法把"带状态的逻辑块"抽出来复用。`}]},
+
 
 {c:'fw', lv:'进阶', q:'React 中 setState 是同步还是异步的？',
  h:'更准确的说法是"批处理"：是否合并更新取决于调用环境，React 18 之后统一了行为。',
@@ -962,7 +1233,12 @@ function handle() {
   setN(prev =&gt; prev + 1);
   setN(prev =&gt; prev + 1); // 函数式更新，正确 +2
 }</code></pre>
-<p><b>关键理解：</b>状态是"快照"——一次渲染中 n 固定不变。需要基于旧值累加时，必须用函数式更新。另外 useState 的更新是浅比较（Object.is），修改对象内部属性不会触发渲染，需要返回新对象。</p>`},
+<p><b>关键理解：</b>状态是"快照"——一次渲染中 n 固定不变。需要基于旧值累加时，必须用函数式更新。另外 useState 的更新是浅比较（Object.is），修改对象内部属性不会触发渲染，需要返回新对象。</p>`,
+ tags:['setState','批处理','React'],
+ fu:[{q:`追问：React 18 在批处理上有什么变化？`, a:`React 18 引入自动批处理：Promise、setTimeout、原生事件回调里的多次更新也会被合并（之前只合并 React 事件和生命周期内的）。如果确实需要同步刷新，用 flushSync 强制。`},
+   {q:`追问：连续 setState 同一个值，为什么会少渲染一次？`, a:`多个更新会被合并；并且如果最终 state 没变（用 Object.is 比较），React 会跳过重渲染。这是性能优化路径，不代表"只执行最后一次更新"。`},
+   {q:`追问：基于前一次状态更新，为什么必须用函数式写法？`, a:`写 setState(count + 1) 时，多次调用读到的都是同一次渲染里的旧值，最终只有最后一个生效；写 setState(c => c + 1) 每次都能拿到最新状态，多次调用会依次叠加。`}]},
+
 
 {c:'fw', lv:'进阶', q:'Vue3 的 Composition API 和 Options API 有什么区别？',
  h:'一个按"逻辑功能"组织代码，一个按"选项类型"组织代码。',
@@ -980,7 +1256,12 @@ export function useCounter(initial = 0) {
   const inc = () =&gt; count.value++;
   return { count, inc };
 }</code></pre>
-<p><b>选择建议：</b>新项目、大型项目、TypeScript 项目优先 Composition API；团队新人多、组件简单的项目 Options API 也完全够用。同一组件可混用，但不建议。</p>`},
+<p><b>选择建议：</b>新项目、大型项目、TypeScript 项目优先 Composition API；团队新人多、组件简单的项目 Options API 也完全够用。同一组件可混用，但不建议。</p>`,
+ tags:['Composition API','Options API','逻辑复用'],
+ fu:[{q:`追问：Composition API 主要解决了什么问题？`, a:`逻辑按功能组织，而不是按选项类型被切散（data、methods、computed 各占一处）。复杂组件里同一功能的代码能聚在一起；另外逻辑复用从 mixin 换成组合式函数，来源清晰、不会命名冲突。`},
+   {q:`追问：组合式函数和 mixin 的区别？`, a:`组合式函数是普通函数，参数与返回值显式声明，来源可追溯；mixin 是隐式合并，属性会静默叠加，多个 mixin 之间的命名冲突很难排查。这是 Vue3 明确推荐前者的原因。`},
+   {q:`追问：两种写法能混用吗？`, a:`能，同一组件里可以并存。但混用会让风格不统一，团队最好约定一种为主，渐进迁移时再逐步替换，不必为了统一而重写全部旧代码。`}]},
+
 
 {c:'fw', lv:'进阶', q:'useEffect 的依赖数组有什么讲究？什么时候需要清理函数？',
  h:'依赖数组控制执行时机，清理函数负责回收副作用。',
@@ -999,7 +1280,12 @@ export function useCounter(initial = 0) {
   return () =&gt; controller.abort();   // 组件卸载或 url 变化时取消请求
 }, [url]);</code></pre>
 <p><b>需要清理的典型场景：</b>定时器、事件监听、WebSocket 连接、订阅、未完成的请求、第三方库实例。</p>
-<p><b>常见问题：</b>依赖数组塞入每次渲染都新建的对象 / 函数，导致无限循环。解决办法是用 useMemo / useCallback 稳定引用，或把依赖改为具体的基本类型值。</p>`},
+<p><b>常见问题：</b>依赖数组塞入每次渲染都新建的对象 / 函数，导致无限循环。解决办法是用 useMemo / useCallback 稳定引用，或把依赖改为具体的基本类型值。</p>`,
+ tags:['useEffect','Hooks'],
+ fu:[{q:`追问：空数组和省略依赖数组有什么区别？`, a:`空数组表示只在挂载时执行一次，卸载时执行清理；省略则每次渲染后都会执行。忘记传依赖是很隐蔽的 bug 来源，eslint 的 exhaustive-deps 规则就是为此存在的。`},
+   {q:`追问：依赖里放了对象为什么会无限循环？`, a:`对象字面量每次渲染都是新引用，React 用 Object.is 比较判定为"变了"，于是重新执行 effect；如果 effect 里又更新了 state，就继续触发渲染，形成死循环。解法是把依赖拆成具体原始值，或用 useMemo 稳定引用。`},
+   {q:`追问：清理函数应该做什么？`, a:`撤销这次 effect 建立的一切：取消订阅、清定时器、中止请求、移除监听。还要注意执行顺序是"先清理旧的，再运行新的"，理解这点才能避免竞态导致旧请求覆盖新结果。`}]},
+
 
 /* ---------- 工程化 ---------- */
 {c:'eng', lv:'高频', q:'Vite 为什么比 Webpack 快？',
@@ -1012,7 +1298,12 @@ export function useCounter(initial = 0) {
 <li><b>热更新：</b>HMR 沿模块图精确失效，只重新请求受影响的模块，无需重新打包整个 bundle，因此更新速度与项目大小解耦。</li>
 </ol>
 <p><b>生产构建：</b>Vite 用 Rollup 打包，并支持 esbuild 做压缩。选择 Rollup 是因为其产物更小、tree-shaking 更完善、插件生态成熟。Vite 5 以后也支持 Rolldown（Rust 版 Rollup）进一步提速。</p>
-<p><b>代价：</b>开发环境依赖浏览器对 ESM 的支持（不支持 IE）；CommonJS 依赖需要预构建转换；动态导入与特殊语法的兼容需要插件处理。</p>`},
+<p><b>代价：</b>开发环境依赖浏览器对 ESM 的支持（不支持 IE）；CommonJS 依赖需要预构建转换；动态导入与特殊语法的兼容需要插件处理。</p>`,
+ tags:['Vite','ESM','构建工具'],
+ fu:[{q:`追问：既然开发时不打包，生产环境为什么还要打包？`, a:`因为原生 ESM 会产生大量小请求和逐层依赖瀑布，浏览器并发也有限制。生产构建用 Rollup 做打包、压缩、Tree-shaking 和代码分割，换取更好的加载性能。`},
+   {q:`追问：依赖预构建解决了什么？`, a:`一是把 CJS / UMD 的依赖转成 ESM，二是把零散的小模块合并成单文件，避免"一个库几百个模块"造成的请求风暴，同时统一依赖实例，防止同一个库被加载多份。`},
+   {q:`追问：Vite 就没有慢的时候吗？`, a:`也有瓶颈：项目非常大时首屏请求数量多；改动公共依赖或配置文件会触发重新预构建。冷启动的首次预构建仍有开销，结果缓存在 node_modules/.vite 下。`}]},
+
 
 {c:'eng', lv:'进阶', q:'tree-shaking 的原理是什么？需要满足哪些条件才生效？',
  h:'基于 ESM 的静态结构分析，前提是模块没有副作用。',
@@ -1024,7 +1315,12 @@ export function useCounter(initial = 0) {
 <li>打包模式为 production，且开启压缩（terser / esbuild minify）。</li>
 <li>避免 <code>import _ from 'lodash'</code> 这类整体导入，改为 <code>import debounce from 'lodash/debounce'</code>，否则整个库都会被打进去。</li>
 </ul>
-<p><b>常见失效原因：</b>库本身只提供 CJS 版本；有顶层副作用（如立即执行的注册逻辑、polyfill）；babel 把 ESM 转成了 CommonJS（需设置 modules: false 保留 ESM 交给打包器处理）。</p>`},
+<p><b>常见失效原因：</b>库本身只提供 CJS 版本；有顶层副作用（如立即执行的注册逻辑、polyfill）；babel 把 ESM 转成了 CommonJS（需设置 modules: false 保留 ESM 交给打包器处理）。</p>`,
+ tags:['tree-shaking','ESM','打包优化'],
+ fu:[{q:`追问：为什么 CommonJS 很难被 tree-shaking？`, a:`CJS 的 require 是运行时求值的，导出可以动态构造（条件赋值 module.exports），静态分析无法确定哪些导出会被使用。ESM 的静态结构才让这件事成为可能。`},
+   {q:`追问：package.json 的 sideEffects 字段是干什么的？`, a:`声明模块是否带副作用。设为 false 表示"未被引用的模块可以整体删除"，让打包器敢于删掉只 import 却没用到导出的文件。但它有风险：纯 CSS 引入、polyfill 这类有副作用的模块会被误删，需要用数组精确声明。`},
+   {q:`追问：什么样的代码摇不掉？`, a:`有副作用的代码、扩展了原型的代码、被动态访问的（如用字符串拼出方法名）、以及最终被入口间接引用到的代码。所以写库要避免"导入即执行"的副作用，纯函数可以加 PURE 标注帮助分析。`}]},
+
 
 {c:'eng', lv:'基础', q:'dependencies 和 devDependencies 有什么区别？装错会怎样？',
  h:'看这个包在运行时是否需要。',
@@ -1036,7 +1332,12 @@ export function useCounter(initial = 0) {
 npm i -D vite             # devDependencies
 npm i -g pnpm             # 全局，不进 package.json</code></pre>
 <p><b>装错的后果：</b>把构建工具装进 dependencies，会导致 CI / 生产镜像体积增大、安装变慢；把运行时依赖装进 devDependencies，在使用 <code>npm ci --omit=dev</code>（生产安装）时该依赖缺失，线上直接报模块找不到。</p>
-<p><b>判断标准：</b>问自己"打包产物或服务运行时是否用到它"。前端项目要特别注意：构建工具链虽然参与产出，但本身不进最终 bundle，属于 devDependencies。</p>`},
+<p><b>判断标准：</b>问自己"打包产物或服务运行时是否用到它"。前端项目要特别注意：构建工具链虽然参与产出，但本身不进最终 bundle，属于 devDependencies。</p>`,
+ tags:['npm','依赖管理','package.json'],
+ fu:[{q:`追问：装错位置会有什么后果？`, a:`构建工具（webpack、vite）被记进 dependencies，生产安装时会一并装上，增加体积和部署时间，也可能被误打进产物；反过来，运行时依赖被记到 devDependencies，用 npm ci --omit=dev 部署时会缺失，直接报模块找不到。`},
+   {q:`追问：peerDependencies 是干什么的？`, a:`用来声明"宿主环境应该提供的依赖"，常见于插件和组件库。它不会被自动安装（新版本 npm 会自动装，反而容易引发冲突），目的是避免同一个包被安装成多份实例。`},
+   {q:`追问：optionalDependencies 呢？`, a:`安装失败不会中断整体安装流程，代码里要自己判断该依赖是否可用。典型用途是平台相关或可能编译失败的原生模块。`}]},
+
 
 {c:'eng', lv:'高频', q:'ES Module 和 CommonJS 有什么区别？',
  h:'从加载时机、导出值的拷贝/引用、能否条件加载、this 指向几个维度比较。',
@@ -1048,7 +1349,12 @@ npm i -g pnpm             # 全局，不进 package.json</code></pre>
 <li><b>异步：</b>ESM 支持顶层 await；CJS 不支持。</li>
 <li><b>使用环境：</b>浏览器原生只支持 ESM（需 type="module"）；Node.js 早期只支持 CJS，现在通过 package.json 的 type 字段区分，或使用 .mjs / .cjs 扩展名。</li>
 </ul>
-<p><b>互操作：</b>ESM 可以 import CJS 模块（默认导出为 module.exports）；CJS 不能直接 require ESM，需要动态 import()。</p>`},
+<p><b>互操作：</b>ESM 可以 import CJS 模块（默认导出为 module.exports）；CJS 不能直接 require ESM，需要动态 import()。</p>`,
+ tags:['ESM','CommonJS','模块化'],
+ fu:[{q:`追问：ESM 的静态结构带来了什么好处？`, a:`编译期就能确定导入导出关系，因此可以做 tree-shaking、静态分析和语法检查。CJS 是运行时解析，做不到这些，只能在运行时发现导出缺失。`},
+   {q:`追问：为什么有的包要同时提供两套入口？`, a:`因为 Node 生态历史上以 CJS 为主，浏览器与现代工具链偏好 ESM。package.json 的 exports 字段可以按条件（import / require）分发不同文件，兼顾两类使用方。`},
+   {q:`追问：__dirname 在 ESM 里为什么用不了？`, a:`ESM 没有 CJS 那套模块包装函数和变量注入，没有 __dirname、__filename 和 require。替代方案是用 import.meta.url 配合 fileURLToPath 计算目录路径。`}]},
+
 
 {c:'eng', lv:'基础', q:'package-lock.json 有什么作用？为什么要提交到仓库？',
  h:'锁定依赖树的精确版本，保证不同环境安装结果一致。',
@@ -1059,7 +1365,12 @@ npm i -g pnpm             # 全局，不进 package.json</code></pre>
 <li>integrity 字段用于校验包内容未被篡改，是供应链安全的一环。</li>
 </ul>
 <p><b>必须提交：</b>这是团队协作和应用可复现构建的基础。npm ci 会严格按 lock 文件安装，且要求 lock 与 package.json 一致，适合 CI 环境，速度也更快。</p>
-<p><b>库项目的情况：</b>发布到 npm 的库通常也需要提交 lock 文件用于开发与 CI，但使用者安装时不会使用你仓库里的 lock 文件，所以库的依赖范围要写宽松，应用的依赖版本要锁严。两者策略不同，可以记为"应用锁死，库放开"。</p>`},
+<p><b>库项目的情况：</b>发布到 npm 的库通常也需要提交 lock 文件用于开发与 CI，但使用者安装时不会使用你仓库里的 lock 文件，所以库的依赖范围要写宽松，应用的依赖版本要锁严。两者策略不同，可以记为"应用锁死，库放开"。</p>`,
+ tags:['lock文件','版本锁定','依赖'],
+ fu:[{q:`追问：^ 和 ~ 分别允许升级到哪一档？`, a:`^1.2.3 允许升到 2.0.0 以下（主版本不变）；~1.2.3 允许升到 1.3.0 以下（次版本不变）；写死版本则完全锁定。lock 文件记录的是实际安装的精确版本和完整性校验值。`},
+   {q:`追问：多人协作时 lock 文件冲突了怎么办？`, a:`不要手工编辑。常见做法是保留一方版本，然后重新执行安装，让 npm 依据 package.json 重算并写回 lock；或者解决完源码冲突后删掉 node_modules 与 lock 重新安装，最后提交一份完整的 lock。`},
+   {q:`追问：npm ci 和 npm install 有什么区别？`, a:`npm ci 严格按 lock 安装，会先清空 node_modules，不修改 lock，速度快且结果可复现，适合 CI；npm install 会更新 lock 并可能升级版本，适合开发时增删依赖。`}]},
+
 
 {c:'eng', lv:'高频', q:'前端性能优化有哪些手段？',
  h:'按"网络加载、资源处理、渲染、运行时"四个阶段组织答案。',
@@ -1082,7 +1393,12 @@ npm i -g pnpm             # 全局，不进 package.json</code></pre>
 <li>大数据计算放 Web Worker，避免阻塞主线程。</li>
 </ul>
 <p><b>四、度量</b></p>
-<p>优化必须有指标：Core Web Vitals 的 LCP（最大内容绘制，&lt;2.5s）、INP（交互响应，&lt;200ms）、CLS（布局偏移，&lt;0.1），配合 Lighthouse / Performance 面板定位瓶颈，先找问题再优化，避免凭感觉改。</p>`},
+<p>优化必须有指标：Core Web Vitals 的 LCP（最大内容绘制，&lt;2.5s）、INP（交互响应，&lt;200ms）、CLS（布局偏移，&lt;0.1），配合 Lighthouse / Performance 面板定位瓶颈，先找问题再优化，避免凭感觉改。</p>`,
+ tags:['性能优化','加载性能','运行时'],
+ fu:[{q:`追问：优化应该从哪里入手？`, a:`先测量再优化：用 Lighthouse、Performance 面板和真实用户指标（Core Web Vitals）确定瓶颈在加载、渲染还是交互，再针对性处理。没有数据支撑的优化很容易做无用功，甚至改坏原有体验。`},
+   {q:`追问：加载阶段最有效的几招是什么？`, a:`路由级代码分割与按需加载、静态资源长缓存配合内容 hash、图片优化（格式、尺寸、懒加载）、关键资源 preload。传输层上 HTTP/2 与 CDN，开启 gzip 或 brotli 压缩。`},
+   {q:`追问：运行时卡顿一般怎么解决？`, a:`拆分长任务（时间切片或 requestIdleCallback）、用虚拟列表处理大数据量、减少不必要的重渲染、把密集计算移出主线程（Web Worker）、动画只用 transform 与 opacity。`}]},
+
 
 {c:'eng', lv:'进阶', q:'首屏加载速度慢，你会怎么排查和优化？',
  h:'先建立度量，再按"资源体积 → 请求瀑布 → 渲染阻塞"层层定位。',
@@ -1095,7 +1411,12 @@ npm i -g pnpm             # 全局，不进 package.json</code></pre>
 <li><b>图片与字体：</b>首屏大图未压缩、字体文件阻塞文本渲染。优化为图片压缩 + 预加载首屏图、字体用 font-display: swap、子集化。</li>
 </ol>
 <p><b>第三步：架构级方案。</b>SSR / SSG（首屏直出 HTML，改善 LCP）、预渲染、Service Worker 缓存、HTTP/2 或 HTTP/3、边缘部署。</p>
-<p><b>核心原则：</b>优先优化 LCP 元素（通常是首屏最大的图片或标题文本），收益最直接；不要一次性上所有方案，按投入产出比排序。</p>`},
+<p><b>核心原则：</b>优先优化 LCP 元素（通常是首屏最大的图片或标题文本），收益最直接；不要一次性上所有方案，按投入产出比排序。</p>`,
+ tags:['首屏','性能排查','LCP'],
+ fu:[{q:`追问：怎么判断是网络问题还是渲染问题？`, a:`看 Performance 面板：TTFB 很高说明问题在服务端或网络；TTFB 正常但 LCP 很晚，就要看是资源加载被阻塞，还是主线程被长任务占住（TBT 高）。网络瀑布图能直接暴露关键路径上的串行等待。`},
+   {q:`追问：SPA 首屏慢的典型原因有哪些？`, a:`打包产物过大（首屏 JS 几百 KB）、请求瀑布（先取 token 再取数据）、白屏时间过长、第三方脚本（统计、客服、广告）阻塞主线程。对应解法是代码分割、SSR 或预渲染、资源预加载、第三方脚本异步化。`},
+   {q:`追问：优化后怎么验证真的有效？`, a:`同一环境下多次测量取中位数，对比 LCP、FCP、TBT 等指标的变化；同时看真实用户数据确认线上改善。单次跑分的波动不能当结论。`}]},
+
 
 {c:'eng', lv:'基础', q:'git merge 和 git rebase 有什么区别？',
  h:'一个保留分叉历史，一个把提交重新排列成直线。',
@@ -1115,7 +1436,12 @@ git rebase -i HEAD~3       # 合并、重排、修改最近 3 个提交</code></
 <li><b>黄金法则：</b>不要对已经推送到共享分支的提交做 rebase。因为 hash 变了，其他人拉取时会历史冲突。</li>
 <li>个人本地分支、开发中的功能分支用 rebase 保持整洁；合并到主分支时用 merge（或 squash merge）保留集成节点。</li>
 <li>rebase 过程中出现冲突，解决后 git rebase --continue；要放弃用 --abort。误操作可用 git reflog 找回。</li>
-</ul>`},
+</ul>`,
+ tags:['git','merge','rebase'],
+ fu:[{q:`追问：为什么说 rebase 是重写历史？`, a:`它把当前分支的提交逐个复制到新的基点上，生成全新的 commit（hash 变化），原提交被丢弃。所以已经推送到远端、且可能被别人拉取过的分支不要 rebase，否则会造成历史分叉和重复提交。`},
+   {q:`追问：两者在冲突处理上有什么差别？`, a:`merge 只在合并点一次性解决冲突；rebase 是逐个提交重放，可能每个提交都要解一次冲突，但最终历史更线性整洁。选哪种取决于团队对历史可读性的偏好。`},
+   {q:`追问：团队里一般怎么约定？`, a:`常见约定是：个人功能分支合并前先 rebase 主干保持整洁，合入主干用 merge 或 PR 的 squash merge 保留合并记录。核心原则只有一条——只 rebase 自己的、未共享的提交。`}]},
+
 
 /* ---------- 算法手写 ---------- */
 {c:'algo', lv:'基础', q:'数组去重，你能写出几种方式？',
@@ -1137,7 +1463,12 @@ git rebase -i HEAD~3       # 合并、重排、修改最近 3 个提交</code></
 }
 // 按对象 id 去重
 uniqBy(list, o =&gt; o.id);</code></pre>
-<p><b>复杂度对比：</b>Set 与 Map 方案是 O(n)，filter + indexOf 是 O(n²)。数据量大时必须用前者。</p>`},
+<p><b>复杂度对比：</b>Set 与 Map 方案是 O(n)，filter + indexOf 是 O(n²)。数据量大时必须用前者。</p>`,
+ tags:['去重','Set','数组'],
+ fu:[{q:`追问：几种写法的时间复杂度分别是多少？`, a:`Set 方案接近 O(n)，底层用哈希表；filter 配 indexOf 或 includes 是 O(n²)。数据量小的时候差别不明显，上万条时差距会很大。`},
+   {q:`追问：Set 去重对对象和 NaN 有效吗？`, a:`对象无效——Set 按引用判等，两个内容相同的对象仍会被保留，要按字段去重得自己用 Map 做键。NaN 有效：Set 内部用 SameValueZero 判等，NaN 被视为等于自身，所以重复的 NaN 只会留一个。`},
+   {q:`追问：去重后还要保留原有顺序怎么办？`, a:`Set 和 Map 都保留插入顺序，天然满足；filter 配 indexOf 也保留顺序。但"先排序再比较相邻元素"的方案会破坏顺序，需要额外处理才能还原。`}]},
+
 
 {c:'algo', lv:'基础', q:'两数之和：给定数组和目标值，找出两个数使其和为 target。',
  h:'暴力双层循环是 O(n²)；用哈希表把"查找补数"降到 O(1)。',
@@ -1153,7 +1484,12 @@ uniqBy(list, o =&gt; o.id);</code></pre>
 }
 twoSum([2, 7, 11, 15], 9);  // [0, 1]</code></pre>
 <p><b>思路：</b>遍历时先判断"我还差多少"是否已经在表里，再把自己存进去。这样一次遍历即可，且天然避免元素重复使用（自己还没入库）。</p>
-<p><b>暴力解法：</b>双层循环枚举所有组合，时间 O(n²)，空间 O(1)。面试时应先说出暴力解，再给出优化过程，体现思考路径。</p>`},
+<p><b>暴力解法：</b>双层循环枚举所有组合，时间 O(n²)，空间 O(1)。面试时应先说出暴力解，再给出优化过程，体现思考路径。</p>`,
+ tags:['哈希表','双指针','数组求和'],
+ fu:[{q:`追问：时间复杂度能优化到多少？`, a:`哈希表一遍遍历：边遍历边查"目标值减当前值"是否出现过，命中即返回。时间 O(n)、空间 O(n)。暴力双重循环是 O(n²)。`},
+   {q:`追问：如果数组已经有序，有更优解吗？`, a:`用双指针：一头一尾，和偏小就移动左指针，偏大就移动右指针。时间 O(n)、空间 O(1)，比哈希表省空间。这也是"有序"这个前提带来的额外收益。`},
+   {q:`追问：如果要求返回所有不重复的组合，比如三数之和？`, a:`先排序，固定一个数后用双指针找另外两个，同时跳过重复元素来去重，整体 O(n²)。注意去重要分别在"找到解之后"和"移动指针时"两个位置处理，漏掉任何一个都会产生重复结果。`}]},
+
 
 {c:'algo', lv:'基础', q:'判断字符串是否为回文，并实现字符串反转。',
  h:'双指针从两端向中间逼近，或者利用数组方法。',
@@ -1174,7 +1510,12 @@ twoSum([2, 7, 11, 15], 9);  // [0, 1]</code></pre>
   const t = s.toLowerCase().replace(/[^a-z0-9]/g, '');
   return t === [...t].reverse().join('');
 }</code></pre>
-<p><b>复杂度：</b>双指针时间 O(n)、额外空间 O(1)；反转法时间 O(n)、空间 O(n)。</p>`},
+<p><b>复杂度：</b>双指针时间 O(n)、额外空间 O(1)；反转法时间 O(n)、空间 O(n)。</p>`,
+ tags:['双指针','回文','字符串'],
+ fu:[{q:`追问：双指针法的复杂度是多少？`, a:`时间 O(n)，实际只需比较一半；空间 O(1)，不产生新字符串。而"反转后与原串比较"的方案是 O(n) 时间加 O(n) 空间。`},
+   {q:`追问：大小写、空格和标点怎么处理？`, a:`先归一化：转小写并过滤掉非字母数字字符，也可以在双指针移动时顺带跳过非法字符。面试主动提这个边界会加分，因为真实业务里的"回文"通常要求忽略标点。`},
+   {q:`追问：中文字符串反转有什么坑？`, a:`直接按字符切分会把代理对（比如 emoji）和组合字符拆散，得到乱码。要用 Array.from 或扩展运算符按码点切分；更严谨的场景按字形簇切分。`}]},
+
 
 {c:'algo', lv:'高频', q:'实现数组扁平化（flatten），并支持指定深度。',
  h:'递归是最直观的；也可以用 reduce、栈或 ES6 的 flat。',
@@ -1198,7 +1539,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
     ? arr.reduce((acc, v) =&gt; acc.concat(Array.isArray(v) ? flatten(v, d - 1) : v), [])
     : arr.slice();</code></pre>
 <p><b>其他方式：</b>原生 <code>arr.flat(depth)</code> 最简洁；stack 迭代版可以避免深层嵌套的栈溢出。</p>
-<p><b>复杂度：</b>时间 O(n × 深度)，空间递归版本为 O(深度) 栈空间。注意空数组元素（稀疏数组）的处理差异。</p>`},
+<p><b>复杂度：</b>时间 O(n × 深度)，空间递归版本为 O(深度) 栈空间。注意空数组元素（稀疏数组）的处理差异。</p>`,
+ tags:['扁平化','递归','迭代'],
+ fu:[{q:`追问：递归和迭代哪个更好？`, a:`递归写法简洁，但嵌套过深会爆栈；迭代（用栈或 reduce 累加）更稳，也容易控制深度。面试两种都写出来并说明取舍，比只写一种更完整。`},
+   {q:`追问：怎么控制展开深度？`, a:`加一个 depth 参数，递归时减一，减到 0 就直接把当前数组整体放进去、不再展开。这也是内置 flat 方法的行为语义。`},
+   {q:`追问：实际项目里会手写吗？`, a:`不会，直接用 Array.prototype.flat 或 flatMap。手写题考的是递归思维和边界处理，答的时候补一句"实际用内置方法"是加分项，说明你知道生产与面试题的区别。`}]},
+
 
 {c:'algo', lv:'高频', q:'快速排序的原理是什么？手写实现并分析复杂度。',
  h:'选基准值，分区，递归。关键是分区函数怎么写。',
@@ -1226,7 +1572,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
 }</code></pre>
 <p><b>复杂度：</b>平均时间 O(n log n)，最坏 O(n²)（数组已基本有序且固定取末尾为基准时）。空间复杂度 O(log n) 递归栈。</p>
 <p><b>优化手段：</b>① 随机选基准或三数取中，避免最坏情况；② 小数组（长度 &lt; 10）切换插入排序；③ 三路分区处理大量重复元素。</p>
-<p><b>稳定性：</b>快排不稳定。需要稳定排序时用归并排序。</p>`},
+<p><b>稳定性：</b>快排不稳定。需要稳定排序时用归并排序。</p>`,
+ tags:['快排','分治','复杂度'],
+ fu:[{q:`追问：最坏情况什么时候出现？怎么优化？`, a:`数组已接近有序或逆序，且每次都取端点为基准时，分区极不平衡，退化成 O(n²)。优化：随机选基准或三数取中；小数组切换插入排序；面对大量重复元素用三路分区。`},
+   {q:`追问：快排是稳定排序吗？`, a:`不是。分区过程中的交换会改变相等元素的相对顺序。需要稳定性就用归并排序，代价是 O(n) 额外空间。`},
+   {q:`追问：空间复杂度为什么是 O(log n)？`, a:`递归调用栈的深度等于分区层数，平均 log n 层，最坏 n 层。优化手段是每次先递归较小的一侧，把栈深度控制在 O(log n)。`}]},
+
 
 {c:'algo', lv:'基础', q:'二分查找的边界条件怎么写才不会出错？',
  h:'关键是区间定义：决定用 while (l <= r) 还是 while (l < r)。',
@@ -1243,7 +1594,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
 }</code></pre>
 <p><b>边界口诀：</b>区间定义决定循环条件与收缩方式，两者必须配套。闭区间 [l, r] 配 <code>while (l &lt;= r)</code>，缩小时 l = mid + 1、r = mid - 1；左闭右开 [l, r) 配 <code>while (l &lt; r)</code>，缩小时 r = mid。混用就会死循环或漏查。</p>
 <p><b>前提：</b>数组必须有序。时间 O(log n)，空间 O(1)。</p>
-<p><b>变体：</b>查找左边界（第一个等于 target 的位置）、右边界，此时命中时不立即返回，而是继续收缩区间。这类题（如 LeetCode 34）是考察重点。</p>`},
+<p><b>变体：</b>查找左边界（第一个等于 target 的位置）、右边界，此时命中时不立即返回，而是继续收缩区间。这类题（如 LeetCode 34）是考察重点。</p>`,
+ tags:['二分查找','边界条件','复杂度'],
+ fu:[{q:`追问：为什么推荐写 left + (right - left) / 2？`, a:`为了防整数溢出。JS 的数字是双精度浮点，在安全范围内影响不大，但这是从 C、Java 一类语言带过来的通用防御习惯，也是面试官爱看的细节。`},
+   {q:`追问：mid 要不要加 1？循环条件写小于还是小于等于？`, a:`取决于区间定义。用闭区间时循环条件写小于等于，收缩时是 left = mid + 1 和 right = mid - 1；用左闭右开时写小于，只动 while 边界以外的一侧。关键是从头到尾保持同一种区间定义，混用必错。`},
+   {q:`追问：怎么找"第一个大于等于目标"的位置？`, a:`不要命中就返回，而是记下答案后继续往左收缩，循环结束时得到的就是边界。查找插入位置、旋转数组找最小值都是这个套路。`}]},
+
 
 {c:'algo', lv:'基础', q:'冒泡排序怎么实现？常见排序算法的复杂度分别是多少？',
  h:'记住"比较 - 交换 - 提前退出优化"，复杂度要能表格化说清。',
@@ -1269,7 +1625,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
 <li>快排：平均 O(n log n)，最坏 O(n²)，空间 O(log n)，<b>不稳定</b></li>
 <li>堆排：始终 O(n log n)，空间 O(1)，<b>不稳定</b></li>
 </ul>
-<p><b>稳定性含义：</b>相等元素的相对顺序是否保持不变。多字段排序时会用到。</p>`},
+<p><b>稳定性含义：</b>相等元素的相对顺序是否保持不变。多字段排序时会用到。</p>`,
+ tags:['冒泡排序','排序','复杂度'],
+ fu:[{q:`追问：什么场景用哪种排序？`, a:`数据量小、基本有序用插入排序；需要稳定且要求 O(n log n) 用归并；内存敏感用堆排序；通用场景直接用库的 sort。能按场景对比着答，比背复杂度表更能体现理解。`},
+   {q:`追问：冒泡的"提前退出"优化是什么？`, a:`如果某一轮没有发生任何交换，说明序列已经有序，可以直接终止。优化后最好情况（本来就有序）降到 O(n)。`},
+   {q:`追问：库里的 sort 用的是什么算法？`, a:`V8 现在用 TimSort（归并与插入的混合，稳定，O(n log n)），早期版本对小数组用插入排序、大数组用快排（不稳定）。所以需要稳定排序时，用库的 sort 比手写快排更省心。`}]},
+
 
 {c:'algo', lv:'基础', q:'斐波那契数列有哪几种实现方式？如何优化？',
  h:'朴素递归的问题在于大量重复计算，用记忆化或迭代解决。',
@@ -1289,7 +1650,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
   return a;
 }</code></pre>
 <p><b>本质：</b>朴素递归慢的根因是重叠子问题，记忆化把指数级降到线性。这正是动态规划的核心思想——用空间换时间避免重复计算。</p>
-<p><b>进阶：</b>n 很大时（如 10^9）可用矩阵快速幂做到 O(log n)，或用通项公式（浮点精度不可靠）。</p>`},
+<p><b>进阶：</b>n 很大时（如 10^9）可用矩阵快速幂做到 O(log n)，或用通项公式（浮点精度不可靠）。</p>`,
+ tags:['动态规划','记忆化','递归'],
+ fu:[{q:`追问：朴素递归为什么会指数爆炸？`, a:`因为存在大量重复子问题，算 f(5) 会重复计算 f(3)、f(2) 很多次，调用次数呈指数增长。加记忆化缓存后每个子问题只算一次，复杂度降到 O(n)。`},
+   {q:`追问：记忆化和动态规划有什么区别？`, a:`记忆化是自顶向下的递归加缓存，动态规划是自底向上填表。两者复杂度相同，DP 省掉递归开销，但需要明确按依赖顺序推导状态转移。`},
+   {q:`追问：还能更快吗？`, a:`矩阵快速幂或快速倍增可以做到 O(log n)。不过面试通常问到 O(n) 时间、O(1) 空间的滚动变量写法就够了，重点是能说清"只保留前两项"的思路。`}]},
+
 
 {c:'algo', lv:'进阶', q:'手写 Promise.all，需要处理非 Promise 元素和失败短路。',
  h:'返回新 Promise，用计数器判断是否全部完成；任一失败立即 reject。',
@@ -1319,7 +1685,12 @@ flatten([1, [2, [3, [4]]]], 2);     // [1, 2, 3, [4]]</code></pre>
 <li>空数组要立即 resolve（而不是永远 pending）</li>
 <li>必须先判断长度再 forEach，否则计数器永远不会等于 0 之外的判断值</li>
 </ul>
-<p><b>对比 allSettled：</b>如果需要"失败也要拿到全部结果"，应改为记录每个 { status, value/reason }，不短路。</p>`},
+<p><b>对比 allSettled：</b>如果需要"失败也要拿到全部结果"，应改为记录每个 { status, value/reason }，不短路。</p>`,
+ tags:['Promise.all','并发','手写'],
+ fu:[{q:`追问：为什么结果要按下标赋值而不是直接 push？`, a:`必须保持与输入顺序一致。push 会按完成时间排序，导致结果错位；所以要预先拿到索引，用 results[i] = v 保证顺序，哪怕后面那个任务先完成。`},
+   {q:`追问：失败"短路"意味着什么？`, a:`任何一个 reject 就让返回的 Promise 立刻 reject，不再等其余任务。但要注意其余任务仍会继续执行，因为语言层面没有取消能力——这点主动说明会显得你理解更完整。`},
+   {q:`追问：Promise.allSettled 和 all 怎么选？`, a:`allSettled 永远 resolve，返回每个任务的状态与结果，适合"允许部分失败"的场景；all 只要有一个失败就整体失败，适合依赖全部成功的场景。`}]},
+
 
 {c:'algo', lv:'进阶', q:'手写 new 操作符，说说它做了哪几件事。',
  h:'创建对象 → 链接原型 → 绑定 this 执行 → 根据返回值决定返回谁。',
@@ -1345,7 +1716,12 @@ p instanceof Person // true</code></pre>
 <li>以该对象为 this 执行构造函数</li>
 <li>构造函数返回对象则返回该对象，否则返回步骤 1 创建的对象</li>
 </ol>
-<p><b>细节：</b>Object.create(proto) 比 obj.__proto__ = proto 更规范；new.target 在构造函数内部可判断是否被 new 调用。</p>`},
+<p><b>细节：</b>Object.create(proto) 比 obj.__proto__ = proto 更规范；new.target 在构造函数内部可判断是否被 new 调用。</p>`,
+ tags:['new','原型','手写'],
+ fu:[{q:`追问：new 具体做了哪四件事？`, a:`① 创建一个新对象；② 把它的原型指向构造函数的 prototype；③ 以它为 this 执行构造函数；④ 如果构造函数返回对象就用它，否则返回新对象。`},
+   {q:`追问：为什么推荐用 Object.create 而不是空对象字面量？`, a:`字面量的原型指向 Object.prototype，还得手动改原型；Object.create(fn.prototype) 一步就把原型链接好了，也避免了直接操作 __proto__ 这种不推荐的写法。`},
+   {q:`追问：这和 instanceof 的关系是什么？`, a:`new 出来的实例，原型链上包含构造函数的 prototype，所以 instanceof 判定为 true。把这两个题连着讲，能说明你理解的是同一条原型链机制，而不是两个孤立的知识点。`}]},
+
 
 {c:'algo', lv:'进阶', q:'手写 instanceof，原理是什么？',
  h:'沿左侧对象的原型链向上查找，看是否出现右侧构造函数的 prototype。',
@@ -1362,7 +1738,12 @@ p instanceof Person // true</code></pre>
 <pre><code>myInstanceof([], Array);       // true
 myInstanceof([], Object);      // true（原型链向上会到达 Object.prototype）
 myInstanceof(1, Number);       // false（基本类型直接返回 false）</code></pre>
-<p><b>与 typeof 的差异：</b>typeof 判断基本类型，instanceof 判断引用类型的继承关系。判断数组应优先用 Array.isArray()，它能正确处理跨 iframe 场景（instanceof 在跨 Realm 时会失效，因为不同窗口的 Array 是不同的构造函数）。</p>`},
+<p><b>与 typeof 的差异：</b>typeof 判断基本类型，instanceof 判断引用类型的继承关系。判断数组应优先用 Array.isArray()，它能正确处理跨 iframe 场景（instanceof 在跨 Realm 时会失效，因为不同窗口的 Array 是不同的构造函数）。</p>`,
+ tags:['instanceof','原型链','手写'],
+ fu:[{q:`追问：为什么用 Object.getPrototypeOf 而不是 __proto__？`, a:`__proto__ 是历史遗留的访问器属性，规范上不鼓励使用，性能和语义都不如标准 API。代码评审里直接写 __proto__ 通常会被要求改掉。`},
+   {q:`追问：什么时候 instanceof 会失效？`, a:`跨执行环境时（iframe、不同的 Realm），各自的构造函数不是同一个引用，判定会失败。这时要用 Array.isArray 或 Object.prototype.toString.call 来判断。`},
+   {q:`追问：你的手写实现忽略了什么？`, a:`没处理右侧不是函数的情况（规范要求抛 TypeError），也没考虑 Symbol.hasInstance 的自定义行为。主动说出这些遗漏，说明你对实现边界有意识，而不是背了一段代码。`}]},
+
 
 {c:'algo', lv:'进阶', q:'最长无重复字符子串（滑动窗口）。',
  h:'用左右指针维护一个无重复的窗口，右指针扩展，遇到重复就移动左指针。',
@@ -1383,7 +1764,12 @@ myInstanceof(1, Number);       // false（基本类型直接返回 false）</cod
 lengthOfLongestSubstring('abcabcbb');  // 3 ('abc')
 lengthOfLongestSubstring('pwwkew');    // 3 ('wke')</code></pre>
 <p><b>复杂度：</b>时间 O(n)（每个字符最多被访问两次），空间 O(min(n, 字符集大小))。</p>
-<p><b>易错点：</b>判断条件是 <code>map.get(ch) &gt;= left</code>，必须加与左边界的比较。否则遇到 '<b>abba</b>' 这类用例时，左指针会被错误地回退到一个已经不在窗口内的旧下标上。</p>`},
+<p><b>易错点：</b>判断条件是 <code>map.get(ch) &gt;= left</code>，必须加与左边界的比较。否则遇到 '<b>abba</b>' 这类用例时，左指针会被错误地回退到一个已经不在窗口内的旧下标上。</p>`,
+ tags:['滑动窗口','双指针','子串'],
+ fu:[{q:`追问：为什么左指针不用回退？`, a:`因为左指针只可能单调右移：窗口内出现重复字符时收缩左边界。两个指针各自最多走 n 步，所以总复杂度是 O(n) 而不是 O(n²)。这是滑动窗口成立的关键前提。`},
+   {q:`追问：怎么记录当前窗口的状态？`, a:`可以用 Map 或对象记录字符与最近出现的下标，也可以用 Set 配合不断删除左端字符。用下标记录更高效——可以把左指针直接跳到重复字符的下一位，而不是一格一格挪。`},
+   {q:`追问：哪类问题适合滑动窗口？`, a:`求"满足条件的连续子数组或子串"的最值或个数，且窗口扩张与收缩都具有单调性（右扩到不合法，左缩就恢复合法）。连续区间类问题基本都符合这个特征。`}]},
+
 
 {c:'algo', lv:'基础', q:'有效括号匹配：判断字符串中的括号是否合法。',
  h:'用栈：遇左括号入栈，遇右括号检查栈顶是否匹配。',
@@ -1403,7 +1789,12 @@ lengthOfLongestSubstring('pwwkew');    // 3 ('wke')</code></pre>
 isValid('([)]');    // false
 isValid('(');       // false</code></pre>
 <p><b>复杂度：</b>时间 O(n)，空间 O(n)。</p>
-<p><b>为什么用栈：</b>括号匹配具有"后进先出"的特征——最后打开的括号必须最先闭合，正好对应栈的结构。这类题是栈的典型应用，同理还有"逆波兰表达式求值"、"每日温度"。</p>`},
+<p><b>为什么用栈：</b>括号匹配具有"后进先出"的特征——最后打开的括号必须最先闭合，正好对应栈的结构。这类题是栈的典型应用，同理还有"逆波兰表达式求值"、"每日温度"。</p>`,
+ tags:['栈','括号匹配','字符串'],
+ fu:[{q:`追问：为什么用栈而不用计数？`, a:`因为括号有嵌套顺序要求。计数只能判断数量是否平衡，无法识别交叉嵌套这类非法情况。栈的后进先出特性天然匹配嵌套结构。`},
+   {q:`追问：必须处理哪些边界？`, a:`遇到右括号时栈为空（说明右括号多了）要直接返回 false；遍历结束后栈必须为空（否则有左括号未闭合）；字符串长度为奇数可以直接返回 false 提前剪枝。`},
+   {q:`追问：如果还要校验多种标签，比如 HTML 标签呢？`, a:`同一套栈的思路：维护开闭映射表，遇到开标签入栈、闭标签出栈比对。差异在于要先处理自闭合标签和属性，通常需要正则或解析器先把标签提取出来。`}]},
+
 
 {c:'algo', lv:'进阶', q:'求数组中第 K 大的元素，如何做到平均 O(n)？',
  h:'快速选择（Quick Select）：快排的分区思想，但只递归一侧。',
@@ -1427,13 +1818,18 @@ function partition(nums, lo, hi) {
   return i;
 }</code></pre>
 <p><b>复杂度：</b>平均 O(n)（每次只递归一半，n + n/2 + n/4 + ... = 2n），最坏 O(n²)（基准选择极差时）。空间 O(1)。</p>
-<p><b>其他解法对比：</b><p></p>
+<p><b>其他解法对比：</b></p>
 <ul>
 <li>排序后取下标：O(n log n)，代码最简单，面试可先说这个</li>
 <li>小顶堆维护 k 个元素：O(n log k)，适合数据量大、k 较小的流式场景（如"10 亿个数取前 100 大"）</li>
 <li>快速选择：平均最优，但会修改原数组</li>
 </ul>
-<p><b>注意：</b>快速选择与快排的区别在于只递归包含目标下标的那一侧。这是把 O(n log n) 降到平均 O(n) 的关键。</p>`},
+<p><b>注意：</b>快速选择与快排的区别在于只递归包含目标下标的那一侧。这是把 O(n log n) 降到平均 O(n) 的关键。</p>`,
+ tags:['快速选择','堆','TopK'],
+ fu:[{q:`追问：快速选择为什么是平均 O(n)？`, a:`每轮分区后只递归包含目标的那一侧，期望工作量是 n + n/2 + n/4 …… 收敛到 2n，所以平均线性。但最坏情况（每次基准都取到极值）会退化成 O(n²)。`},
+   {q:`追问：海量数据求 Top K 怎么做？`, a:`数据超出内存时，维护一个大小为 K 的小顶堆，遍历数据只保留较大的 K 个。时间 O(n log K)、空间 O(K)，比全排序更合适，因为全排序既慢又可能内存溢出。`},
+   {q:`追问：求第 K 大和求前 K 大有什么区别？`, a:`前者只要一个元素，可以用快速选择做到平均 O(n)；后者要保留 K 个元素，通常用堆。如果数据能全量加载且需要有序输出，直接排序反而最省事。`}]},
+
 
 {c:'algo', lv:'进阶', q:'二叉树的层序遍历（BFS）怎么实现？',
  h:'用队列，每轮先记录当前层的节点数量。',
@@ -1464,7 +1860,12 @@ function partition(nums, lo, hi) {
   return res;
 }</code></pre>
 <p><b>复杂度：</b>BFS 与 DFS 都是时间 O(n)、空间 O(n)（BFS 队列最大宽度，DFS 递归栈最大深度）。</p>
-<p><b>工程应用：</b>层序遍历是很多树形结构题的基础，如"树的最大深度"、"锯齿形层序遍历"、"判断完全二叉树"。组件树渲染、目录树遍历都用得到。</p>`},
+<p><b>工程应用：</b>层序遍历是很多树形结构题的基础，如"树的最大深度"、"锯齿形层序遍历"、"判断完全二叉树"。组件树渲染、目录树遍历都用得到。</p>`,
+ tags:['BFS','二叉树','队列'],
+ fu:[{q:`追问：怎么区分每一层？`, a:`每轮循环开始先记录队列长度 len，这一轮只处理 len 个节点，处理完把结果作为一层存起来。这是分层 BFS 最通用的写法，不需要额外记录层号。`},
+   {q:`追问：BFS 和 DFS 怎么选？`, a:`求最短路径、按层处理用 BFS（需要队列，空间与层的宽度成正比）；求所有路径、需要回溯剪枝用 DFS（递归或显式栈）。树结构上两者都能遍历，差别在访问顺序和空间特征。`},
+   {q:`追问：如果要求之字形遍历或右视图呢？`, a:`之字形：记录层号，偶数层把结果反转，或用双端队列按方向头插尾插。右视图：每层只取最后一个节点。本质都是在分层 BFS 上改一行取值逻辑。`}]},
+
 
 {c:'algo', lv:'基础', q:'合并两个有序数组（原地合并）。',
  h:'从后往前比较，避免覆盖未处理的元素。',
@@ -1483,7 +1884,12 @@ function merge(nums1, m, nums2, n) {
 merge([1,2,3,0,0,0], 3, [2,5,6], 3);   // [1,2,2,3,5,6]</code></pre>
 <p><b>为什么从后往前：</b>nums1 后半段是空位，从后往前填充不会覆盖尚未比较的元素。如果从前往后，要么需要额外数组，要么就要频繁搬移元素。</p>
 <p><b>复杂度：</b>时间 O(m + n)，空间 O(1)。</p>
-<p><b>循环条件为什么是 j &gt;= 0：</b>nums2 全部合并完即任务完成；而 nums1 剩余元素本来就在正确位置，无需处理。这是本题的精妙之处。</p>`},
+<p><b>循环条件为什么是 j &gt;= 0：</b>nums2 全部合并完即任务完成；而 nums1 剩余元素本来就在正确位置，无需处理。这是本题的精妙之处。</p>`,
+ tags:['双指针','原地合并','数组'],
+ fu:[{q:`追问：为什么必须从后往前填？`, a:`因为 nums1 尾部预留了空位。从前往后合并会把还没比较的元素覆盖掉；从后往前比较两个数组的最大值并填入末尾，不会覆盖任何未处理元素，所以能做到 O(1) 额外空间。`},
+   {q:`追问：不用原地，最简单的做法是什么？`, a:`用临时数组从头双指针合并，时间同样是 O(m+n)，但需要额外 O(m+n) 空间。面试先答简单版再补原地优化版，层次更清晰。`},
+   {q:`追问：循环的结束条件容易错在哪？`, a:`主循环跑到其中一个数组耗尽即可。关键细节是：nums1 剩余的元素本来就在正确位置，不需要再动；只有 nums2 有剩余时才要继续搬运到 nums1 前部。漏掉这一点是典型 bug。`}]},
+
 
 /* ---------- 概念理解 ---------- */
 {c:'concept', lv:'基础', q:'MVC、MVP、MVVM 有什么区别？',
@@ -1494,7 +1900,12 @@ merge([1,2,3,0,0,0], 3, [2,5,6], 3);   // [1,2,2,3,5,6]</code></pre>
 <li><b>MVVM（Model-View-ViewModel）：</b>核心是<b>双向数据绑定</b>。ViewModel 暴露数据给 View，View 的改动也能自动同步回 ViewModel，中间的同步由框架的响应式系统完成，开发者无需手动操作 DOM。Vue、Angular 属此类。<b>本质是 MVP 的改进版，把同步逻辑自动化了。</b></li>
 </ul>
 <p><b>一句话记忆：</b>MVC 的 C 可以双向联系 View 与 Model；MVP 的 P 单向协调且持有 View；MVVM 的 VM 依靠数据绑定自动同步，是 M 与 V 之间的"翻译层"。</p>
-<p><b>实际项目影响：</b>MVVM 解放了手工 DOM 操作，但双向绑定在复杂表单里可能带来数据流向不清晰的问题，因此 React 选择了单向数据流路线（它是 View 层库，严格说不属于 MVVM）。</p>`},
+<p><b>实际项目影响：</b>MVVM 解放了手工 DOM 操作，但双向绑定在复杂表单里可能带来数据流向不清晰的问题，因此 React 选择了单向数据流路线（它是 View 层库，严格说不属于 MVVM）。</p>`,
+ tags:['架构模式','MVVM','数据流'],
+ fu:[{q:`追问：MVVM 的双向绑定是怎么实现的？`, a:`Vue 用数据劫持（Vue3 是 Proxy）配合依赖收集，数据变化通知视图更新；视图变化通过事件回写数据。组件上的 v-model 就是双向绑定的语法糖，本质是"属性加事件"的组合。`},
+   {q:`追问：双向绑定有什么代价？`, a:`数据流向不直观，排查问题时"谁改了这个值"很难追踪，复杂表单场景调试成本高。React 坚持单向数据流正是为了避免这一点，代价是写起来更啰嗦、需要显式下发回调。`},
+   {q:`追问：MVC 在前端还有用吗？`, a:`它更多演化为"数据层 / 视图层 / 逻辑层"的职责划分思想，而不是严格套用 MVC 三件套。理解各层的职责边界，比给目录起什么名字更重要。`}]},
+
 
 {c:'concept', lv:'高频', q:'什么是虚拟 DOM？它真的比直接操作 DOM 快吗？',
  h:'重点是"批量最小化更新"和"跨平台能力"，而不是绝对速度。',
@@ -1508,7 +1919,13 @@ merge([1,2,3,0,0,0], 3, [2,5,6], 3);   // [1,2,2,3,5,6]</code></pre>
 <li><b>跨平台能力。</b>同一套虚拟 DOM 可以渲染到浏览器、小程序、Native（React Native）、Canvas 等不同宿主环境，只需替换渲染器。</li>
 </ol>
 <p><b>"比原生快吗"——不准确。</b>虚拟 DOM 本身有 diff 的计算开销，单次更新往往比精心手写的最优 DOM 操作更慢。它的价值在于：让普通水平的开发者也能以可接受的性能写复杂界面，且性能下限较高、可预期，而手写 DOM 的性能方差极大。</p>
-<p><b>补充：</b>React 使用 Fiber 架构，把渲染工作拆成可中断的小任务，避免长任务阻塞主线程；Vue3 编译期做静态提升与补丁标记（Patch Flag），尽量减少运行时 diff 的成本。</p>`},
+<p><b>补充：</b>React 使用 Fiber 架构，把渲染工作拆成可中断的小任务，避免长任务阻塞主线程；Vue3 编译期做静态提升与补丁标记（Patch Flag），尽量减少运行时 diff 的成本。</p>`,
+ tags:['虚拟DOM','diff','渲染性能'],
+ fu:[{q:`追问：虚拟 DOM 真的更快吗？`, a:`不绝对。它的价值是用可预期的代价换取开发效率与跨平台能力：批量更新和 diff 减少了无效的 DOM 操作，但单次更新往往比手写最优的原生操作更慢。框架的收益来自"平均情况下的稳定"，而不是极限性能。`},
+   {q:`追问：手写原生操作能超过框架吗？`, a:`在固定且明确的更新路径上可以更快（精准改一个属性）。但业务代码的更新路径复杂多变，手写很难长期保持最优，还容易引入不一致的状态。所以选型通常基于可维护性而非单点性能。`},
+   {q:`追问：Vue3 在虚拟 DOM 上做了什么优化？`, a:`编译阶段标记静态节点、提升静态内容，生成 Block Tree 和动态属性数组，diff 时能跳过静态部分直接定位变化节点，把运行时代价降下来。这是"编译期弥补运行时代价"的典型思路。`},
+   {q:`追问：Svelte 走的是什么路线？`, a:`编译期直接生成操作 DOM 的代码，运行时几乎不需要虚拟 DOM，产物更小、更新路径更直接。代价是少了虚拟 DOM 这层抽象带来的灵活性，比如跨平台渲染的统一抽象会更难做。`}]},
+
 
 {c:'concept', lv:'进阶', q:'前端路由的实现原理是什么？hash 模式和 history 模式有什么区别？',
  h:'一个靠监听 hashchange，一个靠 history API + 服务端配置。',
@@ -1531,7 +1948,12 @@ window.addEventListener('popstate', () =&gt; render(location.pathname));</code><
 <li>优点：URL 干净，更符合传统路径习惯，利于 SEO。</li>
 <li>缺点：<b>刷新页面会 404</b>，因为服务器上没有 /user 这个真实资源。必须在服务端配置 fallback，把所有未匹配的路径都返回 index.html（Nginx 用 try_files，Vite 的 historyApiFallback）。</li>
 </ul>
-<p><b>选择建议：</b>内部系统、无服务端配置权限时用 hash；对外站点、需要 SEO 时用 history，并确保部署配置正确。</p>`},
+<p><b>选择建议：</b>内部系统、无服务端配置权限时用 hash；对外站点、需要 SEO 时用 history，并确保部署配置正确。</p>`,
+ tags:['前端路由','history','hash'],
+ fu:[{q:`追问：history 模式为什么刷新会 404？`, a:`因为 URL 路径是前端自己解释的，服务端并没有这个真实路径，刷新时请求打到服务器就找不到资源。解法是服务端配置 fallback，把未匹配的路径都返回 index.html（Nginx 用 try_files）。`},
+   {q:`追问：hash 模式有什么优缺点？`, a:`优点是无需服务端配合、兼容性好、改 hash 不触发页面请求；缺点是 URL 里带井号不美观，锚点跳转可能与路由冲突，对 SEO 也不友好。`},
+   {q:`追问：路由守卫是做什么的？`, a:`在跳转前后植入拦截逻辑，常用于登录鉴权、权限校验、埋点和离开确认。要注意异步守卫（比如验证 token）的返回值处理，以及如何取消导航，否则容易出现"卡住不动"或"跳转了两次"。`}]},
+
 
 {c:'concept', lv:'进阶', q:'CSR、SSR、SSG、ISR 分别是什么？各自适用什么场景？',
  h:'核心差异是"HTML 在什么时间、由谁生成"。',
@@ -1541,7 +1963,12 @@ window.addEventListener('popstate', () =&gt; render(location.pathname));</code><
 <li><b>SSG（静态站点生成）：</b>构建时就把所有页面渲染成静态 HTML，部署到 CDN。速度最快、成本最低、最稳定。缺点是内容更新需要重新构建。适合博客、文档、营销页（如 Astro、VitePress）。</li>
 <li><b>ISR（增量静态再生成）：</b>Next.js 提出的折中方案。页面以静态形式提供，但可按设定的时间间隔在后台重新生成，兼顾静态性能与内容时效。适合内容量大、更新频率中等的站点（新闻、商品列表）。</li>
 </ul>
-<p><b>选择逻辑：</b>内容是否因人而异（→ SSR）？是否频繁更新（→ ISR / SSR，否则 SSG）？是否需要登录后的强交互（→ CSR）？实践中常混合使用，例如首页 SSG、列表页 ISR、用户中心 CSR。</p>`},
+<p><b>选择逻辑：</b>内容是否因人而异（→ SSR）？是否频繁更新（→ ISR / SSR，否则 SSG）？是否需要登录后的强交互（→ CSR）？实践中常混合使用，例如首页 SSG、列表页 ISR、用户中心 CSR。</p>`,
+ tags:['SSR','SSG','渲染模式'],
+ fu:[{q:`追问：SSR 解决了什么，代价是什么？`, a:`解决首屏白屏和 SEO——返回的 HTML 里已经有内容。代价是需要 Node 服务运行、服务器压力更大、要处理同构代码（window 和 document 不可用）、缓存与降级策略更复杂。`},
+   {q:`追问：SSG 和 SSR 怎么选？`, a:`内容在构建期就确定的（博客、文档、营销页）用 SSG，纯静态、可 CDN 分发、最快；内容随请求变化的（个性化、实时数据）用 SSR。现代框架里两者可以按页面混合使用。`},
+   {q:`追问：什么是水合，它有什么问题？`, a:`服务端渲染出 HTML 后，浏览器端要执行 JS 重新把事件和状态"接上"，这个过程叫水合。它的开销会造成首次交互延迟（INP 变差），所以出现了渐进式水合、孤岛架构等优化方向。`}]},
+
 
 {c:'concept', lv:'进阶', q:'JWT 是什么？它和 Session 有什么区别？',
  h:'状态存哪里：一个在客户端，一个在服务端。',
@@ -1560,7 +1987,12 @@ Authorization: Bearer &lt;token&gt;</code></pre>
 <li><b>撤销能力：</b>Session 删除服务端记录即失效；JWT 一旦签发，在过期前无法主动作废（这是最大痛点）。补救方案是维护黑名单，但那就又变成有状态了。</li>
 <li><b>体积：</b>JWT 明显更大，每个请求都携带会增加流量。</li>
 </ul>
-<p><b>实践建议：</b>Access Token 短有效期（如 15 分钟）+ Refresh Token 长有效期（存 HttpOnly Cookie，只能用于换新 token）。如果业务需要"立即踢下线"、"单点登录互斥"，Session 或"JWT + 黑名单"更合适。</p>`},
+<p><b>实践建议：</b>Access Token 短有效期（如 15 分钟）+ Refresh Token 长有效期（存 HttpOnly Cookie，只能用于换新 token）。如果业务需要"立即踢下线"、"单点登录互斥"，Session 或"JWT + 黑名单"更合适。</p>`,
+ tags:['JWT','Session','鉴权'],
+ fu:[{q:`追问：JWT 由哪几部分组成？`, a:`三段：Header（算法与类型）、Payload（声明，比如用户 id 和过期时间）、Signature（用密钥对前两段签名）。注意 Payload 只是 Base64 编码，不是加密，任何人都能解开看，所以不能放敏感信息。`},
+   {q:`追问：JWT 怎么主动作废？`, a:`这是它的固有短板：签发后到过期前一直有效。常见做法是缩短有效期配合 Refresh Token 轮换，或者维护服务端黑名单、用户版本号——但后者等于又把状态加回来了，所以"JWT 完全无状态"这个说法要打折扣。`},
+   {q:`追问：Session 和 JWT 分别适合什么场景？`, a:`Session 适合单体应用、需要即时踢人、愿意用服务端存储换可控性；JWT 适合多服务或跨域场景的轻量凭证，避免共享 session 存储。分布式部署下 Session 需要集中存储（如 Redis），这也是 JWT 流行的一个原因。`}]},
+
 
 {c:'concept', lv:'进阶', q:'WebSocket 和 HTTP 轮询有什么区别？WebSocket 的连接过程是怎样的？',
  h:'从"谁主动"和"连接是否长驻"两个角度区分。',
@@ -1580,7 +2012,13 @@ Upgrade: websocket
 Connection: Upgrade
 Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
 <p><b>适用场景：</b>WebSocket 适合聊天、协作编辑、实时行情、游戏、通知推送。如果只是偶发通知，SSE（Server-Sent Events）更简单——单向推送、基于 HTTP、自动重连；轮询则适合实时性要求不高的低频场景。</p>
-<p><b>工程注意：</b>需要处理断线重连（指数退避）、心跳保活（防止中间代理断开空闲连接）、鉴权（token 通常放在握手 URL 或首条消息中）。</p>`},
+<p><b>工程注意：</b>需要处理断线重连（指数退避）、心跳保活（防止中间代理断开空闲连接）、鉴权（token 通常放在握手 URL 或首条消息中）。</p>`,
+ tags:['WebSocket','长连接','SSE'],
+ fu:[{q:`追问：轮询、长轮询、WebSocket 的区别？`, a:`轮询是定时发请求，实时性与开销难以兼顾；长轮询让服务端挂起请求直到有数据再返回，减少了空请求但每次仍需重建连接；WebSocket 一次握手后建立全双工长连接，服务端可以主动推送。`},
+   {q:`追问：WebSocket 的握手做了什么？`, a:`借助一次 HTTP 升级请求：客户端发送 Upgrade 头和 Sec-WebSocket-Key，服务端返回 101 Switching Protocols 以及基于 Key 计算出的 Accept 值。之后协议就切换成 WebSocket 的帧格式传输。`},
+   {q:`追问：生产环境要注意什么？`, a:`心跳保活（ping/pong）检测断连、断线重连配合指数退避、多标签页连接复用、代理和网关需支持 Upgrade（Nginx 要配对应头）、以及握手阶段的鉴权。这些是实际落地时最容易踩的坑。`},
+   {q:`追问：SSE 和 WebSocket 怎么选？`, a:`SSE 是服务端单向推送，基于 HTTP、自动重连、实现简单，适合通知和流式输出；WebSocket 是双向通信，适合聊天和协作编辑。如果只是服务端往下推，SSE 更省事。`}]},
+
 
 {c:'concept', lv:'进阶', q:'什么是微前端？它解决了什么问题，又带来了什么代价？',
  h:'核心是"让多个独立团队的技术栈能组合成一个应用"，用隔离和集成换取自治。',
@@ -1604,7 +2042,12 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
 <li>开发环境、调试链路、父子通信、路由同步复杂度显著上升。</li>
 <li>团队需要额外的基建投入与规范约束。</li>
 </ul>
-<p><b>结论：</b>微前端是组织问题的技术解法，不是性能优化手段。团队规模不大、系统耦合度高时，monorepo 往往比微前端更划算。</p>`},
+<p><b>结论：</b>微前端是组织问题的技术解法，不是性能优化手段。团队规模不大、系统耦合度高时，monorepo 往往比微前端更划算。</p>`,
+ tags:['微前端','模块联邦'],
+ fu:[{q:`追问：有哪些主流实现方案？`, a:`路由分发式（Nginx 按路径分流，简单但页面整体刷新）、iframe（隔离最好但体验差、通信困难）、JS 沙箱式（qiankun、single-spa，运行时加载子应用并做隔离）、模块联邦（Webpack 5 或 Vite 方案，编译期共享依赖）。`},
+   {q:`追问：样式隔离怎么解决？`, a:`Shadow DOM 最彻底，但有兼容性和样式穿透问题；CSS Modules 或 scoped 在构建期加命名空间；运行时加前缀（如 qiankun 的沙箱机制）。实践中常有遗留的全局样式，需要渐进治理。`},
+   {q:`追问：什么情况下不该用微前端？`, a:`团队规模小、应用之间耦合紧密、迭代节奏一致时，引入它只会带来额外复杂度：构建链路变长、跨应用通信、依赖重复、调试困难。它首先解决的是组织协作问题，而不是技术性能问题。`}]},
+
 
 {c:'concept', lv:'基础', q:'PWA 是什么？Service Worker 的工作原理是怎样的？',
  h:'核心是"可离线、可安装"，靠 Service Worker 拦截请求实现。',
@@ -1622,7 +2065,12 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
 });</code></pre>
 <p><b>常用缓存策略：</b>Cache First（静态资源）、Network First（接口数据）、Stale While Revalidate（先返回缓存再后台更新）。</p>
 <p><b>配套技术：</b>manifest.json 提供图标与名称以支持安装；Push API 实现消息推送；Workbox 是官方封装库，简化缓存策略编写。</p>
-<p><b>局限：</b>iOS 支持较晚且能力受限；缓存更新策略若设计不当会导致用户长期拿到旧版本，是实践中最常见的坑。</p>`},
+<p><b>局限：</b>iOS 支持较晚且能力受限；缓存更新策略若设计不当会导致用户长期拿到旧版本，是实践中最常见的坑。</p>`,
+ tags:['PWA','Service Worker','离线'],
+ fu:[{q:`追问：Service Worker 的生命周期是怎样的？`, a:`注册 → 安装（install，可预缓存资源）→ 激活（activate，清理旧缓存）→ 拦截 fetch 事件。新版本会处于 waiting 状态，直到所有页面关闭或主动调用 skipWaiting 才接管。`},
+   {q:`追问：离线可用是怎么做到的？`, a:`SW 拦截网络请求，按缓存策略返回结果（缓存优先、网络优先、stale-while-revalidate）。配合 manifest 文件让应用可以安装到桌面。注意缓存要精确管理，否则用户容易一直看到旧版本。`},
+   {q:`追问：它有哪些限制和坑？`, a:`只能在 HTTPS 或 localhost 下运行，作用域受限于脚本所在路径；不能访问 DOM，与页面通信用 postMessage；最大的坑是缓存更新与版本管理，通常靠构建工具生成带 hash 的资源清单来解决。`}]},
+
 
 {c:'concept', lv:'基础', q:'前端常见的性能指标有哪些？Core Web Vitals 指什么？',
  h:'三个核心指标：LCP、INP、CLS，各自衡量不同维度的体验。',
@@ -1638,7 +2086,12 @@ Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=</code></pre>
 <li>TTFB：首字节时间，反映服务端与网络响应速度。</li>
 <li>TBT：总阻塞时间，反映主线程被长任务占用的程度。</li>
 </ul>
-<p><b>采集方式：</b>实验室数据用 Lighthouse / Performance 面板；真实用户数据用 web-vitals 库上报或用 PerformanceObserver 监听。两者需结合——实验室便于定位问题，真实数据反映实际体验。</p>`},
+<p><b>采集方式：</b>实验室数据用 Lighthouse / Performance 面板；真实用户数据用 web-vitals 库上报或用 PerformanceObserver 监听。两者需结合——实验室便于定位问题，真实数据反映实际体验。</p>`,
+ tags:['Core Web Vitals','LCP','性能指标'],
+ fu:[{q:`追问：LCP 的优化重点是什么？`, a:`看最大内容元素（通常是大图或大标题）何时渲染：图片要压缩、用现代格式、必要时 preload 并设置高优先级；避免关键资源被 CSS 或 JS 阻塞；服务端响应要快，因为 TTFB 是它的前提。`},
+   {q:`追问：CLS 是怎么产生的，怎么避免？`, a:`布局偏移通常来自资源加载前后的位置变化：图片或视频没写宽高、字体切换、动态插入的内容（广告、Banner）没有预留空间。给固定尺寸和预留占位是最有效的办法。`},
+   {q:`追问：INP 和 FID 有什么区别？`, a:`FID 只测首次输入的响应延迟，很容易达标；INP 测整次访问中所有交互的响应表现并取较慢值，更能反映真实的卡顿体验。这正是 Core Web Vitals 后来用 INP 替换 FID 的原因。`}]},
+
 
 /* ---------- END ---------- */
 ];
@@ -1684,7 +2137,7 @@ migrateV1();
 
 const seen    = new Set(read(LS.seen, []));
 const starred = new Set(read(LS.star, []));
-const state   = { cat:'all', lv:'all', mode:'all', cur:null, hinted:false, answered:false };
+const state   = { cat:'all', lv:'all', mode:'all', tag:null, cur:null, hinted:false, answered:false, fuAll:false };
 
 const $ = id => document.getElementById(id);
 
@@ -1695,6 +2148,7 @@ function pool() {
     if (state.lv  !== 'all' && q.lv !== state.lv)  return false;
     if (state.mode === 'star' && !starred.has(keyOf(q))) return false;
     if (state.mode === 'new'  && seen.has(keyOf(q)))     return false;
+    if (state.tag && !(q.tags || []).includes(state.tag)) return false;
     return true;
   });
 }
@@ -1750,7 +2204,7 @@ let lastPick = [];
 function next(fromFilter) {
   const list = pool();
   if (!list.length) {
-    state.cur = null; state.hinted = false; state.answered = false;
+    state.cur = null; state.hinted = false; state.answered = false; state.fuAll = false;
     render();
     return;
   }
@@ -1761,7 +2215,7 @@ function next(fromFilter) {
   const fresh = cand.filter(q => !seen.has(keyOf(q)));
   const src = fresh.length ? fresh : cand;
   state.cur = src[Math.floor(Math.random() * src.length)];
-  state.hinted = false; state.answered = false;
+  state.hinted = false; state.answered = false; state.fuAll = false;
   lastPick.push(keyOf(state.cur));
   if (lastPick.length > 30) lastPick.shift();
   seen.add(keyOf(state.cur));
@@ -1792,6 +2246,8 @@ function render() {
     $('qText').textContent = state.mode === 'star' ? '收藏夹还是空的，先刷几道点收藏吧。' : '这个筛选条件下没有题目了。';
     $('hintBox').classList.remove('show');
     $('ansBox').classList.remove('show');
+    $('fuBox').classList.remove('show');
+    $('fuText').innerHTML = '';
     ['hintBtn','ansBtn','starBtn','nextBtn'].forEach(id => $(id).disabled = true);
     return;
   }
@@ -1800,12 +2256,21 @@ function render() {
   $('meta').innerHTML =
     '<span class="tag cat">' + CATS[q.c] + '</span>' +
     '<span class="tag lv-' + q.lv + '">' + q.lv + '</span>' +
+    (q.tags || []).map(t =>
+      '<span class="tag clickable' + (state.tag === t ? ' on' : '') + '" data-tag="' + t + '" title="只看含该标签的题">#' + t + '</span>'
+    ).join('') +
     '<span class="idx">NO.' + String(q.no).padStart(3, '0') + ' / ' + BANK.length + '</span>';
   $('qText').textContent = q.q;
   $('hintText').innerHTML = q.h;
   $('ansText').innerHTML = q.a;
+  $('fuText').innerHTML = (q.fu || []).map((p, i) =>
+    '<div class="fu"><div class="fq"><span class="fno">Q' + (i + 1) + '</span><span>' + p.q + '</span></div>' +
+    '<div class="fa">' + p.a + '</div></div>'
+  ).join('');
   $('hintBox').classList.toggle('show', state.hinted);
   $('ansBox').classList.toggle('show', state.answered);
+  $('fuBox').classList.toggle('show', state.answered);
+  syncFuAll();
   $('hintBtn').textContent = '看提示';
   $('hintBtn').insertAdjacentHTML('beforeend', '<kbd>H</kbd>');
   $('ansBtn').textContent = state.answered ? '收起答案' : '看答案';
@@ -1827,6 +2292,82 @@ function toast(msg) {
 
 $('nextBtn').onclick = () => next();
 
+/* ---------------- 考点标签筛选 ---------------- */
+// 筛选区只列出能跨题检索的标签（出现 2 次以上）。
+// 只对这一题有意义的细粒度标签仍显示在题目上，点它也能筛，只是结果只有一两题。
+function buildTagRow() {
+  const cnt = {};
+  BANK.forEach(q => (q.tags || []).forEach(t => { cnt[t] = (cnt[t] || 0) + 1; }));
+  const hot = Object.entries(cnt)
+    .filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh'));
+  const row = $('tagRow'), box = $('tagChips');
+  box.innerHTML = '';
+  if (!hot.length) { row.style.display = 'none'; return; }
+  row.style.display = '';
+  hot.forEach(([t, n]) => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.dataset.v = t;
+    b.innerHTML = '#' + t + '<span class="n">' + n + '</span>';
+    box.appendChild(b);
+  });
+}
+
+function syncTagChips() {
+  [...$('tagChips').children].forEach(c => c.classList.toggle('on', c.dataset.v === state.tag));
+}
+
+function setTag(t) {
+  state.tag = t || null;
+  // 选中的标签不在热门列表里时，临时补一个 chip，让当前筛选状态在界面上可见
+  if (state.tag && ![...$('tagChips').children].some(c => c.dataset.v === state.tag)) {
+    const n = BANK.filter(q => (q.tags || []).includes(state.tag)).length;
+    const b = document.createElement('button');
+    b.className = 'chip on';
+    b.dataset.v = state.tag;
+    b.innerHTML = '#' + state.tag + '<span class="n">' + n + '</span>';
+    $('tagChips').appendChild(b);
+    $('tagRow').style.display = '';
+  }
+  syncTagChips();
+  next(true);
+}
+
+$('tagRow').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  setTag(state.tag === b.dataset.v ? null : b.dataset.v);
+});
+
+// 题目上的标签徽章每次渲染都会重建，所以把点击事件委托到容器上
+$('meta').addEventListener('click', e => {
+  const b = e.target.closest('.tag.clickable');
+  if (!b) return;
+  setTag(state.tag === b.dataset.tag ? null : b.dataset.tag);
+});
+
+/* ---------------- 面试官追问 ---------------- */
+function syncFuAll() {
+  const all = [...document.querySelectorAll('#fuText .fu')];
+  if (!all.length) { $('fuAll').textContent = ''; return; }
+  const opened = all.filter(el => el.classList.contains('open')).length;
+  $('fuAll').textContent = opened === all.length ? '收起全部' : '展开全部';
+}
+
+$('fuText').addEventListener('click', e => {
+  const fq = e.target.closest('.fq');
+  if (!fq) return;
+  fq.parentNode.classList.toggle('open');
+  syncFuAll();
+});
+
+$('fuAll').onclick = () => {
+  state.fuAll = !state.fuAll;
+  document.querySelectorAll('#fuText .fu').forEach(el => el.classList.toggle('open', state.fuAll));
+  syncFuAll();
+};
+
 $('hintBtn').onclick = () => {
   if (!state.cur) return;
   state.hinted = true;
@@ -1839,6 +2380,7 @@ $('ansBtn').onclick = () => {
   if (state.answered) state.hinted = true;
   $('hintBox').classList.toggle('show', state.hinted);
   $('ansBox').classList.toggle('show', state.answered);
+  $('fuBox').classList.toggle('show', state.answered);
   $('ansBtn').textContent = state.answered ? '收起答案' : '看答案';
   $('ansBtn').insertAdjacentHTML('beforeend', '<kbd>A</kbd>');
 };
@@ -1864,6 +2406,8 @@ $('resetBtn').onclick = () => {
   seen.clear(); starred.clear();
   write(LS.seen, []); write(LS.star, []);
   state.mode = 'all';
+  state.tag = null;
+  syncTagChips();
   document.querySelectorAll('#modeRow .chip').forEach((c, i) => c.classList.toggle('on', i === 0));
   next(true);
   toast('进度已重置');
@@ -1877,6 +2421,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'h' || e.key === 'H') $('hintBtn').click();
   else if (e.key === 'a' || e.key === 'A') $('ansBtn').click();
   else if (e.key === 's' || e.key === 'S') $('starBtn').click();
+  else if ((e.key === 'f' || e.key === 'F') && state.answered) $('fuAll').click();
 });
 
 /* ---------------- 启动 ---------------- */
@@ -1887,6 +2432,8 @@ document.addEventListener('keydown', e => {
   bindRow('catRow', 'cat');
   bindRow('lvRow', 'lv');
   bindRow('modeRow', 'mode');
+  $('fuTotal').textContent = BANK.reduce((s, q) => s + (q.fu ? q.fu.length : 0), 0);
+  buildTagRow();
   next(true);
 })();
 </script>
