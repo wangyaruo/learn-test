@@ -6,7 +6,7 @@
 
 ## 在线访问
 
-部署到 GitHub Pages 后，访问地址为：
+已上线，地址：
 
 ```
 https://wangyaruo.github.io/learn-test/
@@ -14,9 +14,16 @@ https://wangyaruo.github.io/learn-test/
 
 入口页是仓库根目录的 `index.html`，点「开始刷题」进入 `interview-trainer.html`。
 
-> 启用方式（仓库管理员操作一次即可）：Settings → General → 底部 Danger Zone → Change repository visibility 改为 Public；再到 Settings → Pages，Source 选「Deploy from a branch」，分支选 `main`、目录选 `/ (root)`，保存。首次发布可能需要几分钟。
+### 部署方式
+
+由 GitHub Actions 自动部署，配置文件 `.github/workflows/deploy-pages.yml`，push 到 `main` 即触发。流程分两步：
+
+1. **`verify`**：先跑 `scripts/check-bank.js`。校验不通过则中止发布，坏题库不会上线。
+2. **`deploy`**：只组装 `index.html`、`interview-trainer.html`、`.nojekyll` 三个文件发布。`scripts/`、`.github/`、`README.md` 不会暴露到公网。
+
+> 前提：仓库 Settings → Pages → Source 需设为 **GitHub Actions**（而非「Deploy from a branch」），否则 `deploy` 环节会报错要求切换源。
 >
-> 注意：Pages 站点是**公开可访问**的，即使仓库保持私有也一样。私有仓库只保护源码，不会限制网站访问。
+> 注意：Pages 站点是**公开可访问**的，与仓库可见性相互独立。私有仓库只保护源码，不会限制网站访问；Free 计划下 Pages 也仅支持公开仓库。
 
 ## 怎么用
 
@@ -50,11 +57,12 @@ https://wangyaruo.github.io/learn-test/
 ## 目录结构
 
 ```
-index.html                       入口页（Pages 的站点首页）
-interview-trainer.html           刷题主程序：样式、逻辑、题库全部在这一个文件里
-.nojekyll                        告诉 GitHub Pages 跳过 Jekyll 处理
-scripts/check-bank.js            题库校验脚本（零依赖）
-.github/workflows/check-bank.yml  CI：每次 push 自动跑校验
+index.html                         入口页（Pages 的站点首页）
+interview-trainer.html             刷题主程序：样式、逻辑、题库全部在这一个文件里
+.nojekyll                          让 GitHub Pages 跳过 Jekyll 处理
+scripts/check-bank.js              题库校验脚本（零依赖）
+.github/workflows/check-bank.yml   校验：push 与 PR 时自动运行
+.github/workflows/deploy-pages.yml 部署：校验通过后发布到 Pages
 ```
 
 ## 怎么加题
@@ -113,7 +121,10 @@ node scripts/check-bank.js
 2. 解析题库，校验字段完整性、分类与难度合法性、题干唯一性
 3. 校验 `tags` 与 `fu` 的结构：标签非空去重、追问含问题与要点、标签大小写一致性
 
-有错误时退出码为 1，所以也能直接用于 CI。仓库已配置 GitHub Actions，push 后会自动运行。
+有错误时退出码为 1，所以也能直接用于 CI。仓库已配置两个工作流：
+
+- `.github/workflows/check-bank.yml`：push 与 PR 时运行校验，只做检查，不影响发布
+- `.github/workflows/deploy-pages.yml`：push 时**先跑校验，通过后才发布站点**；校验不通过则中止发布，线上仍是上一版可用内容
 
 也可以指定文件路径，用于校验校验器本身是否真的能拦住错误写法：
 
@@ -131,11 +142,33 @@ node scripts/check-bank.js ./某个改动过的副本.html
 
 ## 后续计划
 
-- [ ] 题库扩充到 200 题以上
-- [ ] 自评掌握度（会 / 模糊 / 不会）+ 间隔重复（SRS）
-- [ ] 重构为 Vite + Vue3 + TypeScript，拆分为多文件
-- [ ] 代码语法高亮、关键词搜索
+按「学习闭环是否闭合」排序，而不是按功能多少。当前闭环断在**标记掌握 → 复习调度**之间：进度条统计的是「看过」，不等于「记住」。
+
+**第一轮 · 补齐学习闭环**（无前置，可立即做）
+
+- [ ] 自评掌握度（会 / 模糊 / 不会），三档映射到不同复习间隔
+- [ ] 待复习队列：由上次自评时间推算「今天该复习哪些」
+- [ ] 关键词搜索框；「上一题」回退（历史记录已在代码里维护，只差界面）
+
+**第二轮 · 阅读与复习体验**（依赖第一轮定下的掌握度字段）
+
+- [ ] 目录视图：全部题目一览，按掌握度标色
+- [ ] 代码块一键复制与行号；语法高亮需自写分词器，引 CDN 会破坏离线可用
+- [ ] 算法默写模式：手写完再对答案，不做自动判题
+
+**第三轮 · 架构与长期留存**
+
+- [ ] 进度导出 / 导入，避免清缓存或换设备即全部丢失
+- [ ] PWA：加 manifest 与 Service Worker，手机可加到主屏
+- [ ] 重构为 Vite + Vue3 + TypeScript，拆分为多文件（须等数据字段定稿，否则要迁两次）
+
+**持续**
+
+- [ ] 题库扩充到 200 题以上，按高频分布补齐
+
+**已完成**
+
 - [x] 稳定键持久化，修掉插题导致收藏错位的缺陷
-- [x] 题库校验脚本 + CI
-- [x] 站点入口页与 Pages 部署准备
+- [x] 题库校验脚本 + 双工作流（校验 + 部署门禁）
 - [x] 每题补充考点标签与面试官追问，支持按考点检索
+- [x] 站点上线，Actions 自动发布
