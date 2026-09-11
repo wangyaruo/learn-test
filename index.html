@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>前端面试刷题器</title>
+<meta name="description" content="单文件、零依赖的前端面试刷题工具，85 题覆盖 JS、CSS、浏览器网络、Vue/React、工程化、算法与概念理解。">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1f232c;
+    --border:#2b3140; --text:#e6e9ef; --muted:#8b93a5; --dim:#5d667a;
+    --accent:#4f8cff; --purple:#8b7cff;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+    font-family:var(--sans);font-size:15px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    display:flex;align-items:center;justify-content:center;padding:32px 20px;
+  }
+  .wrap{width:100%;max-width:640px}
+  h1{font-size:26px;font-weight:600;margin:0 0 10px;letter-spacing:.3px}
+  .lead{color:var(--muted);font-size:14.5px;margin:0 0 28px}
+  .cta{
+    display:inline-block;background:var(--accent);color:#fff;text-decoration:none;
+    font-size:15px;font-weight:500;padding:12px 26px;border-radius:10px;
+    transition:background .15s;
+  }
+  .cta:hover{background:#3f7ceb}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--dim);margin-left:14px}
+  .panel{
+    background:var(--panel);border:1px solid var(--border);border-radius:14px;
+    padding:20px 22px;margin-top:28px;
+  }
+  .panel h2{font-size:13px;font-weight:500;color:var(--dim);margin:0 0 14px;letter-spacing:.6px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px}
+  .grid div{font-size:13.5px;color:var(--muted);display:flex;justify-content:space-between;border-bottom:1px solid var(--border);padding:5px 0}
+  .grid span{font-family:var(--mono);color:var(--text);font-size:12.5px}
+  ul.feat{margin:0;padding-left:18px;color:var(--muted);font-size:13.5px}
+  ul.feat li{margin-bottom:5px}
+  footer{margin-top:26px;font-size:12px;color:var(--dim);text-align:center}
+  footer a{color:var(--dim)}
+  @media(max-width:520px){.grid{grid-template-columns:1fr}h1{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>前端面试刷题器</h1>
+  <p class="lead">点按钮随机出新题，先自己想，再看提示和答案。单文件、零依赖、离线可用，不需要安装任何东西。</p>
+
+  <a class="cta" href="interview-trainer.html">开始刷题</a>
+  <span class="meta">85 题 · 七类考点 · 三档难度</span>
+
+  <div class="panel">
+    <h2>题库构成</h2>
+    <div class="grid">
+      <div>JS 基础 <span>21</span></div>
+      <div>CSS <span>10</span></div>
+      <div>浏览器与网络 <span>11</span></div>
+      <div>Vue / React <span>10</span></div>
+      <div>工程化 <span>8</span></div>
+      <div>算法手写 <span>16</span></div>
+      <div>概念理解 <span>9</span></div>
+      <div>合计 <span>85</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>功能</h2>
+    <ul class="feat">
+      <li>支持按分类、难度、复习范围筛选，优先抽没看过的题</li>
+      <li>渐进式揭示：先看提示，再对答案</li>
+      <li>收藏夹、进度条与统计，记录保存在本地浏览器</li>
+      <li>快捷键操作，深浅色主题切换</li>
+    </ul>
+  </div>
+
+  <footer>
+    源码与题库：<a href="https://github.com/wangyaruo/learn-test">github.com/wangyaruo/learn-test</a>
+  </footer>
+</div>
+</body>
+</html>

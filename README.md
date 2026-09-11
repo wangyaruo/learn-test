@@ -4,9 +4,23 @@
 
 **共 85 题**，覆盖 JS 基础、CSS、浏览器与网络、Vue/React、工程化、算法手写、概念理解七类，难度分基础 / 高频 / 进阶三档。
 
+## 在线访问
+
+部署到 GitHub Pages 后，访问地址为：
+
+```
+https://wangyaruo.github.io/learn-test/
+```
+
+入口页是仓库根目录的 `index.html`，点「开始刷题」进入 `interview-trainer.html`。
+
+> 启用方式（仓库管理员操作一次即可）：Settings → General → 底部 Danger Zone → Change repository visibility 改为 Public；再到 Settings → Pages，Source 选「Deploy from a branch」，分支选 `main`、目录选 `/ (root)`，保存。首次发布可能需要几分钟。
+>
+> 注意：Pages 站点是**公开可访问**的，即使仓库保持私有也一样。私有仓库只保护源码，不会限制网站访问。
+
 ## 怎么用
 
-直接双击 `interview-trainer.html`，用浏览器打开即可。不需要 Node、不需要 npm、不需要构建，断网也能用。
+直接双击 `index.html`（入口页）或 `interview-trainer.html`，用浏览器打开即可。不需要 Node、不需要 npm、不需要构建，断网也能用。
 
 ### 快捷键
 
@@ -28,8 +42,10 @@
 ## 目录结构
 
 ```
-interview-trainer.html          主程序：样式、逻辑、题库全部在这一个文件里
-scripts/check-bank.js           题库校验脚本（零依赖）
+index.html                       入口页（Pages 的站点首页）
+interview-trainer.html           刷题主程序：样式、逻辑、题库全部在这一个文件里
+.nojekyll                        告诉 GitHub Pages 跳过 Jekyll 处理
+scripts/check-bank.js            题库校验脚本（零依赖）
 .github/workflows/check-bank.yml  CI：每次 push 自动跑校验
 ```
 
@@ -97,3 +113,4 @@ node scripts/check-bank.js ./某个改动过的副本.html
 - [ ] 代码语法高亮、关键词搜索
 - [x] 稳定键持久化，修掉插题导致收藏错位的缺陷
 - [x] 题库校验脚本 + CI
+- [x] 站点入口页与 Pages 部署准备
