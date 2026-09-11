@@ -188,6 +188,12 @@
    每条题目结构：
      { c: 分类key, lv: 难度, q: 题干, h: 提示, a: 参考答案(HTML) }
    想加题就往数组里追加一个对象即可，参考最上面几条的写法。
+
+   两条硬性约束（改完题库务必跑一次校验脚本）：
+     1. 题干 q 必须全局唯一 —— 它是收藏与进度的稳定键（见下方 keyOf）
+     2. 答案 a 的反引号内不能出现裸反引号，行内代码一律用 <code> 标签
+
+   校验命令：node scripts/check-bank.js
    ============================================================ */
 const BANK = [
 /* ---------- JS 基础 ---------- */
@@ -1643,12 +1649,38 @@ const CATS = {
 };
 const LVS = ['基础','高频','进阶'];
 
-BANK.forEach((q, i) => { q.id = i + 1; });
+// no 只用于界面展示序号，不参与任何持久化（插题后序号变化是无害的）
+BANK.forEach((q, i) => { q.no = i + 1; });
+
+// 稳定键 = 分类 + 题干。题干在题库内必须唯一，check-bank.js 会强制校验这一点。
+// 持久化一律用稳定键，不用数组下标，这样在中间插入或删除题目都不会让历史记录错位。
+// 注意：修改某题的题干等于换了一把钥匙，该题的进度与收藏会重置——这是预期行为。
+const keyOf = q => q.c + '::' + q.q;
 
 /* ---------------- 状态 ---------------- */
-const LS = { seen:'ift_seen', star:'ift_star', theme:'ift_theme' };
+// v2：持久化键由"数组下标"升级为"稳定键"，键名加 _v2 后缀以区分旧数据
+const LS = { seen:'ift_seen_v2', star:'ift_star_v2', theme:'ift_theme' };
+const LS_V1 = { seen:'ift_seen', star:'ift_star' };
 const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+
+// 一次性迁移：v1 存的数字是当时的数组位置（从 1 起），换算成稳定键后写入 v2 键名
+function migrateV1() {
+  const oldSeen = read(LS_V1.seen, null);
+  const oldStar = read(LS_V1.star, null);
+  if (oldSeen === null && oldStar === null) return;
+  const toKeys = arr => (Array.isArray(arr) ? arr : [])
+    .map(n => BANK[Number(n) - 1])
+    .filter(Boolean)
+    .map(keyOf);
+  write(LS.seen, toKeys(oldSeen));
+  write(LS.star, toKeys(oldStar));
+  try {
+    localStorage.removeItem(LS_V1.seen);
+    localStorage.removeItem(LS_V1.star);
+  } catch (e) {}
+}
+migrateV1();
 
 const seen    = new Set(read(LS.seen, []));
 const starred = new Set(read(LS.star, []));
@@ -1661,8 +1693,8 @@ function pool() {
   return BANK.filter(q => {
     if (state.cat !== 'all' && q.c !== state.cat) return false;
     if (state.lv  !== 'all' && q.lv !== state.lv)  return false;
-    if (state.mode === 'star' && !starred.has(q.id)) return false;
-    if (state.mode === 'new'  && seen.has(q.id))     return false;
+    if (state.mode === 'star' && !starred.has(keyOf(q))) return false;
+    if (state.mode === 'new'  && seen.has(keyOf(q)))     return false;
     return true;
   });
 }
@@ -1722,16 +1754,17 @@ function next(fromFilter) {
     render();
     return;
   }
-  let cand = list.filter(q => q.id !== (state.cur && state.cur.id));
+  const curKey = state.cur ? keyOf(state.cur) : null;
+  let cand = list.filter(q => keyOf(q) !== curKey);
   if (!cand.length) cand = list;
   // 优先出没看过的，避免连续重复
-  const fresh = cand.filter(q => !seen.has(q.id));
+  const fresh = cand.filter(q => !seen.has(keyOf(q)));
   const src = fresh.length ? fresh : cand;
   state.cur = src[Math.floor(Math.random() * src.length)];
   state.hinted = false; state.answered = false;
-  lastPick.push(state.cur.id);
+  lastPick.push(keyOf(state.cur));
   if (lastPick.length > 30) lastPick.shift();
-  seen.add(state.cur.id);
+  seen.add(keyOf(state.cur));
   write(LS.seen, [...seen]);
   render();
   if (!fromFilter) {
@@ -1743,16 +1776,15 @@ function next(fromFilter) {
 /* ---------------- 渲染主卡片 ---------------- */
 function render() {
   const q = state.cur;
-  const list = pool();
+  const p = pool();
 
   // 统计
-  const p = pool();
-  $('sSeen').textContent = p.filter(x => seen.has(x.id)).length;
+  $('sSeen').textContent = p.filter(x => seen.has(keyOf(x))).length;
   $('sPool').textContent = p.length;
   $('sStar').textContent = starred.size;
   $('sMode').textContent = state.mode === 'star' ? '收藏' : state.mode === 'new' ? '未看过' : '全部';
   $('total').textContent = BANK.length;
-  const done = p.length ? p.filter(x => seen.has(x.id)).length / p.length : 0;
+  const done = p.length ? p.filter(x => seen.has(keyOf(x))).length / p.length : 0;
   $('bar').style.width = (done * 100).toFixed(1) + '%';
 
   if (!q) {
@@ -1768,7 +1800,7 @@ function render() {
   $('meta').innerHTML =
     '<span class="tag cat">' + CATS[q.c] + '</span>' +
     '<span class="tag lv-' + q.lv + '">' + q.lv + '</span>' +
-    '<span class="idx">NO.' + String(q.id).padStart(3, '0') + ' / ' + BANK.length + '</span>';
+    '<span class="idx">NO.' + String(q.no).padStart(3, '0') + ' / ' + BANK.length + '</span>';
   $('qText').textContent = q.q;
   $('hintText').innerHTML = q.h;
   $('ansText').innerHTML = q.a;
@@ -1779,7 +1811,7 @@ function render() {
   $('ansBtn').textContent = state.answered ? '收起答案' : '看答案';
   $('ansBtn').insertAdjacentHTML('beforeend', '<kbd>A</kbd>');
 
-  const st = starred.has(q.id);
+  const st = starred.has(keyOf(q));
   $('starBtn').className = st ? 'on' : '';
   $('starBtn').textContent = st ? '已收藏' : '收藏';
   $('starBtn').insertAdjacentHTML('beforeend', '<kbd>S</kbd>');
@@ -1813,7 +1845,7 @@ $('ansBtn').onclick = () => {
 
 $('starBtn').onclick = () => {
   if (!state.cur) return;
-  const id = state.cur.id;
+  const id = keyOf(state.cur);
   if (starred.has(id)) { starred.delete(id); toast('已取消收藏'); }
   else { starred.add(id); toast('已加入收藏'); }
   write(LS.star, [...starred]);
